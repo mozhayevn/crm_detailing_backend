@@ -1,0 +1,49 @@
+from fastapi import FastAPI
+
+from app.database import Base, engine
+from app.routes.clients import router as clients_router
+from app.routes.cars import router as cars_router
+from app.routes.services import router as services_router
+from app.routes.car_types import router as car_types_router
+from app.routes.pricing import router as pricing_router
+from app.routes.material_brands import router as brands_router
+from app.routes.service_packages import router as packages_router
+from app.routes.service_price_rules import router as service_price_rules_router
+from app.routes.orders import router as orders_router
+from app.routes.roles import router as roles_router
+from app.routes.permissions import router as permissions_router
+from app.routes.users import router as users_router
+from app.routes.work_bays import router as work_bays_router
+from app.routes.auth import router as auth_router
+from app.routes.units import router as units_router
+from app.routes.materials import router as materials_router
+from app.routes.order_item_materials import router as order_item_materials_router
+from app.routes.car_type_pricing_rules import router as car_type_pricing_rules_router
+
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI()
+
+app.include_router(clients_router)
+app.include_router(cars_router)
+app.include_router(services_router)
+app.include_router(car_types_router)
+app.include_router(pricing_router)
+app.include_router(brands_router)
+app.include_router(packages_router)
+app.include_router(service_price_rules_router)
+app.include_router(orders_router)
+app.include_router(roles_router)
+app.include_router(permissions_router)
+app.include_router(users_router)
+app.include_router(work_bays_router)
+app.include_router(auth_router)
+app.include_router(units_router)
+app.include_router(materials_router)
+app.include_router(order_item_materials_router)
+app.include_router(car_type_pricing_rules_router)
+
+
+@app.get("/")
+def root():
+    return {"message": "CRM is running"}
