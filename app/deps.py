@@ -1,5 +1,5 @@
 from jose import JWTError, jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -7,10 +7,26 @@ from app.config import settings
 from app.database import get_db
 from app.models import User, Role, UserRole, RolePermission, Permission
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login-form")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login-form", auto_error=False)
 
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+def get_token_from_request(
+    request: Request,
+    token_from_header: str | None = Depends(oauth2_scheme),
+) -> str | None:
+    if token_from_header:
+        return token_from_header
+    return request.cookies.get("access_token")
+
+
+def get_current_user(token: str | None = Depends(get_token_from_request), db: Session = Depends(get_db)) -> User:
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",

@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from typing import Optional
 
 from app.database import get_db
 from app.deps import get_current_active_user, get_user_roles, get_user_permissions
@@ -62,7 +63,6 @@ def login_form(
         path="/",
         max_age=60 * 60 * 24
     )
-
 
     return {"access_token": access_token, "token_type": "bearer"}
 
