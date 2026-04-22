@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -45,17 +45,26 @@ def login_json(data: LoginRequest, db: Session = Depends(get_db)):
 
 @router.post("/login-form", response_model=Token)
 def login_form(
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
-    # В Swagger поле username используется как email
     user = authenticate_user(form_data.username, form_data.password, db)
     access_token = create_access_token(subject=str(user.id))
 
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-    }
+    # NEW: cookie для web-клиента
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        samesite="lax",
+        secure=False,   # True на https
+        path="/",
+        max_age=60 * 60 * 24
+    )
+
+    # оставить как было (не ломает swagger/старых клиентов)
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 @router.get("/me", response_model=UserResponse)
