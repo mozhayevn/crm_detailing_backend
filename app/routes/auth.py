@@ -63,7 +63,7 @@ def login_form(
         max_age=60 * 60 * 24
     )
 
-    # оставить как было (не ломает swagger/старых клиентов)
+
     return {"access_token": access_token, "token_type": "bearer"}
 
 
