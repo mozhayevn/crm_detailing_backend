@@ -176,7 +176,7 @@ class Order(Base):
 
     client = relationship("Client", back_populates="orders")
     car = relationship("Car")
-    assigned_user = relationship("User")
+    assigned_user = relationship("User", foreign_keys=[assigned_user_id])
     work_bay = relationship("WorkBay")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
 

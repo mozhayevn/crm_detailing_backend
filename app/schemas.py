@@ -321,33 +321,34 @@ class OrderResponse(BaseModel):
 
 
 #new
-class OrderListRowResponse(BaseModel):
+class OrderListItemResponse(BaseModel):
     id: int
     status: str
     total_price: int
     pricing_locked: bool
+
     created_at: datetime
     scheduled_at: datetime | None = None
     planned_start_at: datetime | None = None
     planned_end_at: datetime | None = None
+
     client_id: int
-    client_full_name: str
-    client_phone: str
+    client_full_name: str | None = None
+    client_phone: str | None = None
+
     car_id: int
-    car_display_name: str
-    plate_number: str | None = None
+    car_brand: str | None = None
+    car_model: str | None = None
+    car_plate_number: str | None = None
+
     work_bay_id: int | None = None
     work_bay_name: str | None = None
+
     assigned_user_id: int | None = None
     assigned_user_full_name: str | None = None
-    items_count: int
 
-
-class OrdersListResponse(BaseModel):
-    total: int
-    limit: int
-    offset: int
-    rows: list[OrderListRowResponse]
+    class Config:
+        from_attributes = True
 
 #new ends
 
