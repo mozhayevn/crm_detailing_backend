@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from datetime import datetime, date
 import json
 
@@ -30,6 +31,9 @@ from app.schemas import (
     OrderReschedule,
     OrderCancel,
     OrderAuditLogResponse,
+    #new
+    OrdersListResponse,
+    OrderStatusHistoryResponse,
 )
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -45,6 +49,38 @@ VALID_STATUSES = [
 ]
 
 
+#new def
+def apply_order_filters(
+    query,
+    status: str | None = None,
+    client_id: int | None = None,
+    phone: str | None = None,
+    plate_number: str | None = None,
+    work_bay_id: int | None = None,
+    assigned_user_id: int | None = None,
+):
+    if status:
+        query = query.filter(Order.status == status)
+
+    if client_id:
+        query = query.filter(Order.client_id == client_id)
+
+    if work_bay_id:
+        query = query.filter(Order.work_bay_id == work_bay_id)
+
+    if assigned_user_id:
+        query = query.filter(Order.assigned_user_id == assigned_user_id)
+
+    if phone:
+        query = query.join(Client).filter(Client.phone.ilike(f"%{phone}%"))
+
+    if plate_number:
+        query = query.join(Car).filter(Car.plate_number.ilike(f"%{plate_number}%"))
+
+    return query
+
+
+#end def
 # =========================
 # TIME CONFLICT CHECK
 # =========================
@@ -297,8 +333,11 @@ def get_orders(
     assigned_user_id: int | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("orders.read")),
+    client_name: str | None = Query(None),
 ):
     query = db.query(Order)
+
+    client_joined = False
 
     if status:
         query = query.filter(Order.status == status)
@@ -313,7 +352,20 @@ def get_orders(
         query = query.filter(Order.assigned_user_id == assigned_user_id)
 
     if phone:
-        query = query.join(Client).filter(Client.phone.ilike(f"%{phone}%"))
+        if not client_joined:
+            query = query.join(Client)
+            client_joined = True
+        query = query.filter(Client.phone.ilike(f"%{phone}%"))
+
+    if client_name:
+        if not client_joined:
+            query = query.join(Client)
+            client_joined = True
+
+        search_parts = client_name.strip().split()
+
+        for part in search_parts:
+            query = query.filter(Client.full_name.ilike(f"%{part}%"))
 
     if plate_number:
         query = query.join(Car).filter(Car.plate_number.ilike(f"%{plate_number}%"))
