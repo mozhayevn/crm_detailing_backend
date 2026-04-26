@@ -286,6 +286,18 @@ class UserRoleAuditLog(Base):
     target_user = relationship("User", foreign_keys=[target_user_id])
     role = relationship("Role")
 
+    @property
+    def actor_user_full_name(self) -> str | None:
+        return self.actor_user.full_name if self.actor_user else None
+
+    @property
+    def target_user_full_name(self) -> str | None:
+        return self.target_user.full_name if self.target_user else None
+
+    @property
+    def role_name(self) -> str | None:
+        return self.role.name if self.role else None
+
 
 class OrderAuditLog(Base):
     __tablename__ = "order_audit_logs"
@@ -300,6 +312,10 @@ class OrderAuditLog(Base):
     order = relationship("Order")
     actor_user = relationship("User")
 
+    @property
+    def actor_user_full_name(self) -> str | None:
+        return self.actor_user.full_name if self.actor_user else None
+
 
 class PricingAuditLog(Base):
     __tablename__ = "pricing_audit_logs"
@@ -313,3 +329,8 @@ class PricingAuditLog(Base):
 
     order = relationship("Order")
     actor_user = relationship("User")
+
+    @property
+    def actor_user_full_name(self) -> str | None:
+        return self.actor_user.full_name if self.actor_user else None
+

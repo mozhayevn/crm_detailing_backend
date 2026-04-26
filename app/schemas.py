@@ -646,8 +646,11 @@ class OrderPricingResponse(BaseModel):
 class UserRoleAuditLogResponse(BaseModel):
     id: int
     actor_user_id: int
+    actor_user_full_name: str | None = None
     target_user_id: int
+    target_user_full_name: str | None = None
     role_id: int | None = None
+    role_name: str | None = None
     action: str
     details: str | None = None
     created_at: datetime
@@ -660,6 +663,7 @@ class OrderAuditLogResponse(BaseModel):
     id: int
     order_id: int
     actor_user_id: int
+    actor_user_full_name: str | None = None
     action: str
     details: str | None = None
     created_at: datetime
@@ -672,6 +676,7 @@ class PricingAuditLogResponse(BaseModel):
     id: int
     order_id: int
     actor_user_id: int
+    actor_user_full_name: str | None = None
     action: str
     details: str | None = None
     created_at: datetime

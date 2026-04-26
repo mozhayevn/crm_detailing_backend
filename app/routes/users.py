@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.deps import require_permission, get_user_roles, get_user_permissions
@@ -175,6 +175,11 @@ def get_user_audit_logs(
 
     logs = (
         db.query(UserRoleAuditLog)
+        .options(
+            joinedload(UserRoleAuditLog.actor_user),
+            joinedload(UserRoleAuditLog.target_user),
+            joinedload(UserRoleAuditLog.role),
+        )
         .filter(UserRoleAuditLog.target_user_id == user_id)
         .order_by(UserRoleAuditLog.created_at.desc())
         .all()

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session, aliased, joinedload
 from sqlalchemy import func
 from datetime import datetime, date
 import json
@@ -787,6 +787,7 @@ def get_order_audit_logs(
 ):
     logs = (
         db.query(OrderAuditLog)
+        .options(joinedload(OrderAuditLog.actor_user))
         .filter(OrderAuditLog.order_id == order_id)
         .order_by(OrderAuditLog.created_at.desc())
         .all()

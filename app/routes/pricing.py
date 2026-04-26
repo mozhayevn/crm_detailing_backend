@@ -1,6 +1,6 @@
 import json
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
 from app.database import get_db
@@ -289,6 +289,7 @@ def apply_order_pricing(
     audit_log = PricingAuditLog(
         order_id=order.id,
         actor_user_id=current_user.id,
+        actor_user_full_name=current_user.full_name,
         action="pricing_applied",
         details=json.dumps(
             {
@@ -333,6 +334,7 @@ def get_pricing_audit_logs(
 ):
     logs = (
         db.query(PricingAuditLog)
+        .options(joinedload(PricingAuditLog.actor_user))
         .filter(PricingAuditLog.order_id == order_id)
         .order_by(PricingAuditLog.created_at.desc())
         .all()
@@ -401,6 +403,7 @@ def unlock_order_pricing(
     audit_log = PricingAuditLog(
         order_id=order.id,
         actor_user_id=current_user.id,
+        actor_user_full_name=current_user.full_name,
         action="pricing_unlocked",
         details=f"Pricing unlocked for recalculation. Reason: {data.reason}",
     )
