@@ -36,6 +36,7 @@ def create_car(
         model=car.model,
         year=car.year,
         plate_number=car.plate_number,
+        color=car.color,
     )
 
     db.add(new_car)

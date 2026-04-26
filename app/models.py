@@ -34,6 +34,7 @@ class Car(Base):
     brand = Column(String, nullable=False)
     model = Column(String, nullable=False)
     year = Column(Integer, nullable=True)
+    color = Column(String, nullable=True)
     plate_number = Column(String, unique=True, nullable=True)
 
     client = relationship("Client", back_populates="cars")
