@@ -235,8 +235,13 @@ def build_order_items_and_total(
             discount_amount=0,
             discount_percent=discount_percent,
             discount_reason=item.discount_reason,
-            ddiscount_applied_by_user_id=current_user.id if discount_percent > 0 else None,
+            discount_applied_by_user_id=current_user.id if discount_percent > 0 else None,
             total=0,
+            base_cost_snapshot=0,
+            gross_price_snapshot=0,
+            discount_amount_snapshot=0,
+            final_price_snapshot=0,
+            profit_snapshot=0,
         )
 
         created_items.append(order_item)
@@ -248,76 +253,98 @@ def build_order_items_and_total(
 # CREATE ORDER
 # =========================
 @router.post("/", response_model=OrderResponse)
-def create_order(order_data: OrderCreate, db: Session = Depends(get_db), current_user: User = Depends(require_permission("orders.create"))):
-    client = db.query(Client).filter(Client.id == order_data.client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
+def create_order(
+    order_data: OrderCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("orders.create")),
+):
+    try:
+        client = db.query(Client).filter(Client.id == order_data.client_id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
 
-    car = db.query(Car).filter(Car.id == order_data.car_id).first()
-    if not car:
-        raise HTTPException(status_code=404, detail="Car not found")
+        car = db.query(Car).filter(Car.id == order_data.car_id).first()
+        if not car:
+            raise HTTPException(status_code=404, detail="Car not found")
 
-    if order_data.assigned_user_id:
-        user = db.query(User).filter(User.id == order_data.assigned_user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        if order_data.assigned_user_id:
+            user = db.query(User).filter(User.id == order_data.assigned_user_id).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
 
-    if order_data.work_bay_id:
-        work_bay = db.query(WorkBay).filter(WorkBay.id == order_data.work_bay_id).first()
-        if not work_bay:
-            raise HTTPException(status_code=404, detail="Work bay not found")
+        if order_data.work_bay_id:
+            work_bay = db.query(WorkBay).filter(WorkBay.id == order_data.work_bay_id).first()
+            if not work_bay:
+                raise HTTPException(status_code=404, detail="Work bay not found")
 
-    check_time_conflict(
-        db=db,
-        planned_start_at=order_data.planned_start_at,
-        planned_end_at=order_data.planned_end_at,
-        work_bay_id=order_data.work_bay_id,
-    )
+        check_time_conflict(
+            db=db,
+            planned_start_at=order_data.planned_start_at,
+            planned_end_at=order_data.planned_end_at,
+            work_bay_id=order_data.work_bay_id,
+        )
 
-    new_order = Order(
-        client_id=order_data.client_id,
-        car_id=order_data.car_id,
-        assigned_user_id=order_data.assigned_user_id,
-        work_bay_id=order_data.work_bay_id,
-        status="new",
-        scheduled_at=order_data.scheduled_at,
-        planned_start_at=order_data.planned_start_at,
-        planned_end_at=order_data.planned_end_at,
-        comment=order_data.comment,
-    )
+        new_order = Order(
+            client_id=order_data.client_id,
+            car_id=order_data.car_id,
+            assigned_user_id=order_data.assigned_user_id,
+            work_bay_id=order_data.work_bay_id,
+            status="new",
+            scheduled_at=order_data.scheduled_at,
+            planned_start_at=order_data.planned_start_at,
+            planned_end_at=order_data.planned_end_at,
+            comment=order_data.comment,
+            total_price=0,
+        )
 
-    db.add(new_order)
-    db.commit()
-    db.refresh(new_order)
+        db.add(new_order)
 
-    created_items, total_price = build_order_items_and_total(
-        new_order.id,
-        car,
-        order_data.items,
-        db,
-        current_user,
-    )
+        # Важно: flush дает new_order.id без окончательного commit.
+        db.flush()
 
-    for item in created_items:
-        db.add(item)
+        created_items, total_price = build_order_items_and_total(
+            new_order.id,
+            car,
+            order_data.items,
+            db,
+            current_user,
+        )
 
-    new_order.total_price = total_price
+        for item in created_items:
+            db.add(item)
 
-    db.commit()
-    db.refresh(new_order)
+        new_order.total_price = total_price
 
-    db.add(OrderStatusHistory(order_id=new_order.id, old_status=None, new_status="new"))
-    db.commit()
+        db.add(
+            OrderStatusHistory(
+                order_id=new_order.id,
+                old_status=None,
+                new_status="new",
+            )
+        )
 
-    audit_log = OrderAuditLog(
-        order_id=new_order.id,
-        actor_user_id=current_user.id,
-        action="created",
-        details=f"Order #{new_order.id} created",
-    )
-    db.add(audit_log)
-    db.commit()
-    return new_order
+        db.add(
+            OrderAuditLog(
+                order_id=new_order.id,
+                actor_user_id=current_user.id,
+                action="created",
+                details=f"Order #{new_order.id} created",
+            )
+        )
+
+        # Один commit в самом конце.
+        db.commit()
+        db.refresh(new_order)
+
+        return new_order
+
+    except HTTPException:
+        db.rollback()
+        raise
+
+    except Exception:
+        db.rollback()
+        raise
 
 
 # =========================
