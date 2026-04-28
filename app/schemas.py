@@ -301,6 +301,8 @@ class OrderResponse(BaseModel):
     client_id: int
     car_id: int
     status: str
+    assigned_user_id: int | None = None
+    work_bay_id: int | None = None
     comment: str | None = None
     cancellation_reason: str | None = None
     total_price: int
