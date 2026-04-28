@@ -17,17 +17,15 @@ def add_material_to_order_item(
     current_user: User = Depends(require_permission("materials.consume")),
 ):
     order_item = db.query(OrderItem).filter(OrderItem.id == order_item_id).first()
+    if not order_item:
+        raise HTTPException(status_code=404, detail="Order item not found")
+
     order = db.query(Order).filter(Order.id == order_item.order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
     if order.pricing_locked:
         raise HTTPException(status_code=400, detail="Pricing is locked for this order")
-
-    #------
-
-    if not order_item:
-        raise HTTPException(status_code=404, detail="Order item not found")
 
     material = db.query(Material).filter(Material.id == data.material_id).first()
     if not material:
@@ -90,3 +88,37 @@ def get_order_item_materials(
         .order_by(OrderItemMaterial.id.desc())
         .all()
     )
+
+
+@router.delete("/{order_item_material_id}")
+def delete_order_item_material(
+    order_item_material_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("materials.consume")),
+):
+    row = (
+        db.query(OrderItemMaterial)
+        .filter(OrderItemMaterial.id == order_item_material_id)
+        .first()
+    )
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Order item material not found")
+
+    order_item = db.query(OrderItem).filter(OrderItem.id == row.order_item_id).first()
+    if not order_item:
+        raise HTTPException(status_code=404, detail="Order item not found")
+
+    order = db.query(Order).filter(Order.id == order_item.order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if order.pricing_locked:
+        raise HTTPException(status_code=400, detail="Pricing is locked for this order")
+
+    db.delete(row)
+    db.commit()
+
+    return {
+        "detail": "Order item material deleted"
+    }
