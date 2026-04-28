@@ -370,6 +370,8 @@ class OrderStatusUpdate(BaseModel):
 
 
 class OrderUpdate(BaseModel):
+    client_id: int | None = None
+    car_id: int | None = None
     assigned_user_id: int | None = None
     work_bay_id: int | None = None
     scheduled_at: datetime | None = None

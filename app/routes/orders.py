@@ -470,11 +470,36 @@ def update_order(
     if order.pricing_locked:
         raise HTTPException(status_code=400, detail="Pricing is locked for this order")
 
-    car = db.query(Car).filter(Car.id == order.car_id).first()
+    if data.client_id is not None:
+        client = db.query(Client).filter(Client.id == data.client_id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
+
+    if data.car_id is not None:
+        car = db.query(Car).filter(Car.id == data.car_id).first()
+        if not car:
+            raise HTTPException(status_code=404, detail="Car not found")
+
+        if data.client_id is not None and car.client_id != data.client_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Car does not belong to selected client",
+            )
+
+        if data.client_id is None and car.client_id != order.client_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Car does not belong to current order client",
+            )
+
+    effective_car_id = data.car_id if data.car_id is not None else order.car_id
+    car = db.query(Car).filter(Car.id == effective_car_id).first()
     if not car:
         raise HTTPException(status_code=404, detail="Car not found")
 
     old_order_data = {
+        "client_id": order.client_id,
+        "car_id": order.car.id,
         "assigned_user_id": order.assigned_user_id,
         "work_bay_id": order.work_bay_id,
         "scheduled_at": str(order.scheduled_at) if order.scheduled_at else None,
@@ -491,6 +516,12 @@ def update_order(
         work_bay_id=data.work_bay_id,
         exclude_order_id=order.id,
     )
+
+    if data.client_id is not None:
+        order.client_id = data.client_id
+
+    if data.car_id is not None:
+        order.car_id = data.car_id
 
     order.assigned_user_id = data.assigned_user_id
     order.work_bay_id = data.work_bay_id
@@ -643,6 +674,8 @@ def update_order(
     order.total_price = 0
 
     new_order_data = {
+        "client_id": order.client_id,
+        "car_id": order.car_id,
         "assigned_user_id": order.assigned_user_id,
         "work_bay_id": order.work_bay_id,
         "scheduled_at": str(order.scheduled_at) if order.scheduled_at else None,
