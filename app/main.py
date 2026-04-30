@@ -21,10 +21,15 @@ from app.routes.materials import router as materials_router
 from app.routes.order_item_materials import router as order_item_materials_router
 from app.routes.car_type_pricing_rules import router as car_type_pricing_rules_router
 from app.routes.payments import router as payments_router
+from app.routes.order_checklist import router as order_checklist_router
+from fastapi.staticfiles import StaticFiles
+from app.routes.orders import router as orders_photos_router
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 app.add_middleware(
 
@@ -57,7 +62,8 @@ app.include_router(materials_router)
 app.include_router(order_item_materials_router)
 app.include_router(car_type_pricing_rules_router)
 app.include_router(payments_router)
-
+app.include_router(order_checklist_router)
+app.include_router(orders_photos_router)
 
 @app.get("/")
 def root():

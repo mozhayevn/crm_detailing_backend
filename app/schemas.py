@@ -747,3 +747,90 @@ class PaymentAuditLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+#production checklist
+class OrderChecklistItemCreate(BaseModel):
+    title: str
+    description: str | None = None
+    key: str | None = None
+    is_required: bool = True
+    sort_order: int = 0
+    comment: str | None = None
+
+
+class OrderChecklistItemUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    is_required: bool | None = None
+    sort_order: int | None = None
+    comment: str | None = None
+
+
+class OrderChecklistItemComplete(BaseModel):
+    comment: str | None = None
+
+
+class OrderChecklistItemResponse(BaseModel):
+    id: int
+    order_id: int
+
+    key: str | None = None
+    title: str
+    description: str | None = None
+
+    status: str
+    is_required: bool
+    sort_order: int
+
+    comment: str | None = None
+
+    completed_at: datetime | None = None
+    completed_by_user_id: int | None = None
+    completed_by_user_full_name: str | None = None
+
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class OrderChecklistAuditLogResponse(BaseModel):
+    id: int
+    order_id: int
+    checklist_item_id: int | None = None
+    actor_user_id: int
+    actor_user_full_name: str | None = None
+    action: str
+    details: str | None = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class OrderPhotoResponse(BaseModel):
+    id: int
+    order_id: int
+    checklist_item_id: int | None = None
+
+    photo_type: str
+
+    storage_provider: str
+    storage_key: str
+    file_url: str
+
+    original_filename: str | None = None
+    mime_type: str | None = None
+    file_size: int
+
+    comment: str | None = None
+
+    uploaded_by_user_id: int
+    uploaded_by_user_full_name: str | None = None
+
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

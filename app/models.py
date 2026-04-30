@@ -393,3 +393,90 @@ class PaymentAuditLog(Base):
     def actor_user_full_name(self) -> str | None:
         return self.actor_user.full_name if self.actor_user else None
 
+
+#Production checklist
+class OrderChecklistItem(Base):
+    __tablename__ = "order_checklist_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
+
+    key = Column(String, nullable=True)  # vehicle_accepted / before_photos / quality_control
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+
+    status = Column(String, nullable=False, default="pending")  # pending / done
+    is_required = Column(Boolean, nullable=False, default=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+
+    comment = Column(Text, nullable=True)
+
+    completed_at = Column(DateTime, nullable=True)
+    completed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+    order = relationship("Order")
+    completed_by_user = relationship("User", foreign_keys=[completed_by_user_id])
+
+    @property
+    def completed_by_user_full_name(self) -> str | None:
+        return self.completed_by_user.full_name if self.completed_by_user else None
+
+
+class OrderChecklistAuditLog(Base):
+    __tablename__ = "order_checklist_audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
+    checklist_item_id = Column(Integer, ForeignKey("order_checklist_items.id"), nullable=True)
+
+    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    action = Column(String, nullable=False)  # checklist_created / item_updated / item_completed / item_reopened
+    details = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    order = relationship("Order")
+    checklist_item = relationship("OrderChecklistItem")
+    actor_user = relationship("User")
+
+    @property
+    def actor_user_full_name(self) -> str | None:
+        return self.actor_user.full_name if self.actor_user else None
+
+
+class OrderPhoto(Base):
+    __tablename__ = "order_photos"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
+    checklist_item_id = Column(Integer, ForeignKey("order_checklist_items.id"), nullable=True)
+
+    photo_type = Column(String, nullable=False)  # before / after / damage / progress / quality_control / other
+
+    storage_provider = Column(String, nullable=False, default="local")  # local / r2 / s3 / minio
+    storage_key = Column(String, nullable=False)
+    file_url = Column(String, nullable=False)
+
+    original_filename = Column(String, nullable=True)
+    mime_type = Column(String, nullable=True)
+    file_size = Column(Integer, nullable=False, default=0)
+
+    comment = Column(Text, nullable=True)
+
+    uploaded_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    order = relationship("Order")
+    checklist_item = relationship("OrderChecklistItem")
+    uploaded_by_user = relationship("User")
+
+    @property
+    def uploaded_by_user_full_name(self) -> str | None:
+        return self.uploaded_by_user.full_name if self.uploaded_by_user else None
