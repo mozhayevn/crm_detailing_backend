@@ -334,3 +334,62 @@ class PricingAuditLog(Base):
     def actor_user_full_name(self) -> str | None:
         return self.actor_user.full_name if self.actor_user else None
 
+
+class Payment(Base):
+    __tablename__ = "payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
+    amount = Column(Integer, nullable=False)
+
+    method = Column(String, nullable=False)  # cash / kaspi / card / bank_transfer / other
+    status = Column(String, nullable=False, default="completed")  # completed / canceled / refunded
+
+    comment = Column(String, nullable=True)
+
+    paid_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    canceled_at = Column(DateTime, nullable=True)
+    canceled_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    cancel_reason = Column(String, nullable=True)
+
+    order = relationship("Order")
+    created_by_user = relationship("User", foreign_keys=[created_by_user_id])
+    canceled_by_user = relationship("User", foreign_keys=[canceled_by_user_id])
+
+    @property
+    def created_by_user_full_name(self) -> str | None:
+        return self.created_by_user.full_name if self.created_by_user else None
+
+    @property
+    def canceled_by_user_full_name(self) -> str | None:
+        return self.canceled_by_user.full_name if self.canceled_by_user else None
+
+
+class PaymentAuditLog(Base):
+    __tablename__ = "payment_audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
+    payment_id = Column(Integer, ForeignKey("payments.id"), nullable=True)
+
+    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    action = Column(String, nullable=False)  # payment_created / payment_canceled
+    details = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    order = relationship("Order")
+    payment = relationship("Payment")
+    actor_user = relationship("User")
+
+    @property
+    def actor_user_full_name(self) -> str | None:
+        return self.actor_user.full_name if self.actor_user else None
+

@@ -691,3 +691,59 @@ class PricingAuditLogResponse(BaseModel):
 
 class PricingUnlockRequest(BaseModel):
     reason: str
+
+
+class PaymentCreate(BaseModel):
+    amount: int
+    method: str
+    paid_at: datetime | None = None
+    comment: str | None = None
+
+
+class PaymentCancel(BaseModel):
+    reason: str
+
+
+class PaymentResponse(BaseModel):
+    id: int
+    order_id: int
+    amount: int
+    method: str
+    status: str
+    comment: str | None = None
+
+    paid_at: datetime
+    created_at: datetime
+
+    created_by_user_id: int
+    created_by_user_full_name: str | None = None
+
+    canceled_at: datetime | None = None
+    canceled_by_user_id: int | None = None
+    canceled_by_user_full_name: str | None = None
+    cancel_reason: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class PaymentSummaryResponse(BaseModel):
+    order_id: int
+    total_price: int
+    paid_amount: int
+    remaining_amount: int
+    payment_status: str
+
+
+class PaymentAuditLogResponse(BaseModel):
+    id: int
+    order_id: int
+    payment_id: int | None = None
+    actor_user_id: int
+    actor_user_full_name: str | None = None
+    action: str
+    details: str | None = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

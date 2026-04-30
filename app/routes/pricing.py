@@ -143,6 +143,12 @@ def calculate_order_pricing(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
+    if order.status == "canceled":
+        raise HTTPException(
+            status_code=400,
+            detail="Pricing preview is not available for canceled orders",
+        )
+
     order_items = (
         db.query(OrderItem)
         .filter(OrderItem.order_id == order_id)
@@ -199,131 +205,146 @@ def apply_order_pricing(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("pricing.manage")),
 ):
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if order.pricing_locked:
-        raise HTTPException(status_code=400, detail="Pricing is already applied and locked")
+    try:
+        order = db.query(Order).filter(Order.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
 
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
+        if order.pricing_locked:
+            raise HTTPException(status_code=400, detail="Pricing is already applied and locked")
 
+        if order.status in ["canceled", "delivered"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Pricing cannot be applied to order with status {order.status}",
+            )
 
-    order_items = (
-        db.query(OrderItem)
-        .filter(OrderItem.order_id == order_id)
-        .order_by(OrderItem.id.asc())
-        .all()
-    )
-
-    if not order_items:
-        raise HTTPException(status_code=400, detail="Order has no items")
-
-    total_gross_price = 0
-    total_discount_amount = 0
-    total_materials_cost = 0
-    total_labor_cost = 0
-    total_final_price = 0
-    total_profit = 0
-
-    has_warning = False
-    warning_level = "none"
-    warning_messages = []
-
-    item_summaries = []
-
-    for item in order_items:
-        result = calculate_order_item_values(item.id, db)
-        item_summaries.append(
-            {
-                "order_item_id": item.id,
-                "service_id": item.service_id,
-                "quantity": item.quantity,
-                "materials_cost": result["materials_cost"],
-                "labor_cost": result["labor_cost"],
-                "base_cost": result["base_cost"],
-                "multiplier": result["multiplier"],
-                "gross_price": result["gross_price"],
-                "discount_percent": result["discount_percent"],
-                "discount_amount": result["discount_amount"],
-                "final_price": result["final_price"],
-                "profit": result["profit"],
-                "has_warning": result["has_warning"],
-            }
+        order_items = (
+            db.query(OrderItem)
+            .filter(OrderItem.order_id == order_id)
+            .order_by(OrderItem.id.asc())
+            .all()
         )
 
-        if result["has_warning"]:
-            has_warning = True
-            warning_messages.append(f"Order item #{item.id}: {result['warning_message']}")
+        if not order_items:
+            raise HTTPException(status_code=400, detail="Order has no items")
 
-            if result["warning_level"] == "negative_profit":
-                warning_level = "negative_profit"
-            elif result["warning_level"] == "low_margin" and warning_level != "negative_profit":
-                warning_level = "low_margin"
+        total_gross_price = 0
+        total_discount_amount = 0
+        total_materials_cost = 0
+        total_labor_cost = 0
+        total_final_price = 0
+        total_profit = 0
 
-        # Сохраняем финальную цену в order_item
-        item.price = result["final_price"]
-        item.discount_amount = result["discount_amount"]
-        item.total = result["final_price"] * item.quantity
+        has_warning = False
+        warning_level = "none"
+        warning_messages = []
 
-        item.base_cost_snapshot = result["base_cost"]
-        item.gross_price_snapshot = result["gross_price"]
-        item.discount_amount_snapshot = result["discount_amount"]
-        item.final_price_snapshot = result["final_price"]
-        item.profit_snapshot = result["profit"]
+        item_summaries = []
 
-        if item.discount_percent > 0:
-            item.discount_applied_by_user_id = current_user.id
+        for item in order_items:
+            result = calculate_order_item_values(item.id, db)
 
-        total_gross_price += result["gross_price"] * item.quantity
-        total_discount_amount += result["discount_amount"] * item.quantity
-        total_materials_cost += result["materials_cost"]
-        total_labor_cost += result["labor_cost"]
-        total_final_price += item.total
-        total_profit += result["profit"] * item.quantity
+            item_summaries.append(
+                {
+                    "order_item_id": item.id,
+                    "service_id": item.service_id,
+                    "quantity": item.quantity,
+                    "materials_cost": result["materials_cost"],
+                    "labor_cost": result["labor_cost"],
+                    "base_cost": result["base_cost"],
+                    "multiplier": result["multiplier"],
+                    "gross_price": result["gross_price"],
+                    "discount_percent": result["discount_percent"],
+                    "discount_amount": result["discount_amount"],
+                    "final_price": result["final_price"],
+                    "profit": result["profit"],
+                    "has_warning": result["has_warning"],
+                    "warning_level": result["warning_level"],
+                    "warning_message": result["warning_message"],
+                }
+            )
 
-    order.total_price = total_final_price
-    order.pricing_locked = True
+            if result["has_warning"]:
+                has_warning = True
+                warning_messages.append(f"Order item #{item.id}: {result['warning_message']}")
 
-    db.commit()
-    db.refresh(order)
+                if result["warning_level"] == "negative_profit":
+                    warning_level = "negative_profit"
+                elif result["warning_level"] == "low_margin" and warning_level != "negative_profit":
+                    warning_level = "low_margin"
 
-    audit_log = PricingAuditLog(
-        order_id=order.id,
-        actor_user_id=current_user.id,
-        actor_user_full_name=current_user.full_name,
-        action="pricing_applied",
-        details=json.dumps(
-            {
-                "totals": {
-                    "gross": total_gross_price,
-                    "discount": total_discount_amount,
-                    "final_price": total_final_price,
-                    "profit": total_profit,
-                    "warning_level": warning_level,
-                    "warning": warning_messages if warning_messages else [],
-                    "items_count": len(order_items),
+            item.price = result["final_price"]
+            item.discount_amount = result["discount_amount"]
+            item.total = result["final_price"] * item.quantity
+
+            item.base_cost_snapshot = result["base_cost"]
+            item.gross_price_snapshot = result["gross_price"]
+            item.discount_amount_snapshot = result["discount_amount"]
+            item.final_price_snapshot = result["final_price"]
+            item.profit_snapshot = result["profit"]
+
+            if item.discount_percent > 0:
+                item.discount_applied_by_user_id = current_user.id
+
+            total_gross_price += result["gross_price"] * item.quantity
+            total_discount_amount += result["discount_amount"] * item.quantity
+            total_materials_cost += result["materials_cost"]
+            total_labor_cost += result["labor_cost"]
+            total_final_price += item.total
+            total_profit += result["profit"] * item.quantity
+
+        order.total_price = total_final_price
+        order.pricing_locked = True
+
+        audit_log = PricingAuditLog(
+            order_id=order.id,
+            actor_user_id=current_user.id,
+            action="pricing_applied",
+            details=json.dumps(
+                {
+                    "totals": {
+                        "gross": total_gross_price,
+                        "discount": total_discount_amount,
+                        "materials_cost": total_materials_cost,
+                        "labor_cost": total_labor_cost,
+                        "final_price": total_final_price,
+                        "profit": total_profit,
+                        "warning_level": warning_level,
+                        "warning": warning_messages if warning_messages else [],
+                        "items_count": len(order_items),
+                    },
+                    "items": item_summaries,
                 },
-                "items": item_summaries,
-            },
-            ensure_ascii=False,
+                ensure_ascii=False,
+            ),
         )
-    )
-    db.add(audit_log)
-    db.commit()
-    db.refresh(order)
 
-    return OrderPricingResponse(
-        order_id=order.id,
-        items_count=len(order_items),
-        total_materials_cost=total_materials_cost,
-        total_labor_cost=total_labor_cost,
-        total_gross_price=total_gross_price,
-        total_discount_amount=total_discount_amount,
-        total_final_price=total_final_price,
-        total_profit=total_profit,
-        has_warning=has_warning,
-        warning_level=warning_level,
-        warning_message="; ".join(warning_messages) if warning_messages else None,
-    )
+        db.add(audit_log)
+        db.commit()
+        db.refresh(order)
+
+        return OrderPricingResponse(
+            order_id=order.id,
+            items_count=len(order_items),
+            total_materials_cost=total_materials_cost,
+            total_labor_cost=total_labor_cost,
+            total_gross_price=total_gross_price,
+            total_discount_amount=total_discount_amount,
+            total_final_price=total_final_price,
+            total_profit=total_profit,
+            has_warning=has_warning,
+            warning_level=warning_level,
+            warning_message="; ".join(warning_messages) if warning_messages else None,
+        )
+
+    except HTTPException:
+        db.rollback()
+        raise
+
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.get("/order/{order_id}/audit-logs", response_model=list[PricingAuditLogResponse])
@@ -350,76 +371,90 @@ def unlock_order_pricing(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("pricing.manage")),
 ):
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order.pricing_locked:
-        raise HTTPException(status_code=400, detail="Pricing is already unlocked")
+    try:
+        order = db.query(Order).filter(Order.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
 
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
+        if not order.pricing_locked:
+            raise HTTPException(status_code=400, detail="Pricing is already unlocked")
 
-    if not data.reason or not data.reason.strip():
-        raise HTTPException(status_code=400, detail="Unlock reason is required")
+        if order.status in ["canceled", "delivered"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Pricing cannot be unlocked for order with status {order.status}",
+            )
 
-    order.pricing_locked = False
-    db.commit()
-    db.refresh(order)
+        if not data.reason or not data.reason.strip():
+            raise HTTPException(status_code=400, detail="Unlock reason is required")
 
-    order_items = (
-        db.query(OrderItem)
-        .filter(OrderItem.order_id == order_id)
-        .order_by(OrderItem.id.asc())
-        .all()
-    )
+        order.pricing_locked = False
 
-    total_gross_price = 0
-    total_discount_amount = 0
-    total_materials_cost = 0
-    total_labor_cost = 0
-    total_final_price = 0
-    total_profit = 0
-    has_warning = False
-    warning_level = "none"
-    warning_messages = []
+        order_items = (
+            db.query(OrderItem)
+            .filter(OrderItem.order_id == order_id)
+            .order_by(OrderItem.id.asc())
+            .all()
+        )
 
-    for item in order_items:
-        result = calculate_order_item_values(item.id, db)
+        total_gross_price = 0
+        total_discount_amount = 0
+        total_materials_cost = 0
+        total_labor_cost = 0
+        total_final_price = 0
+        total_profit = 0
+        has_warning = False
+        warning_level = "none"
+        warning_messages = []
 
-        total_materials_cost += result["materials_cost"]
-        total_labor_cost += result["labor_cost"]
-        total_gross_price += result["gross_price"] * item.quantity
-        total_discount_amount += result["discount_amount"] * item.quantity
-        total_final_price += result["final_price"] * item.quantity
-        total_profit += result["profit"] * item.quantity
+        for item in order_items:
+            result = calculate_order_item_values(item.id, db)
 
-        if result["has_warning"]:
-            has_warning = True
-            warning_messages.append(f"Order item #{item.id}: {result['warning_message']}")
+            total_materials_cost += result["materials_cost"]
+            total_labor_cost += result["labor_cost"]
+            total_gross_price += result["gross_price"] * item.quantity
+            total_discount_amount += result["discount_amount"] * item.quantity
+            total_final_price += result["final_price"] * item.quantity
+            total_profit += result["profit"] * item.quantity
 
-            if result["warning_level"] == "negative_profit":
-                warning_level = "negative_profit"
-            elif result["warning_level"] == "low_margin" and warning_level != "negative_profit":
-                warning_level = "low_margin"
+            if result["has_warning"]:
+                has_warning = True
+                warning_messages.append(f"Order item #{item.id}: {result['warning_message']}")
 
-    audit_log = PricingAuditLog(
-        order_id=order.id,
-        actor_user_id=current_user.id,
-        actor_user_full_name=current_user.full_name,
-        action="pricing_unlocked",
-        details=f"Pricing unlocked for recalculation. Reason: {data.reason}",
-    )
-    db.add(audit_log)
-    db.commit()
+                if result["warning_level"] == "negative_profit":
+                    warning_level = "negative_profit"
+                elif result["warning_level"] == "low_margin" and warning_level != "negative_profit":
+                    warning_level = "low_margin"
 
-    return OrderPricingResponse(
-        order_id=order.id,
-        items_count=len(order_items),
-        total_materials_cost=total_materials_cost,
-        total_labor_cost=total_labor_cost,
-        total_gross_price=total_gross_price,
-        total_discount_amount=total_discount_amount,
-        total_final_price=total_final_price,
-        total_profit=total_profit,
-        has_warning=has_warning,
-        warning_level=warning_level,
-        warning_message="; ".join(warning_messages) if warning_messages else None,
-    )
+        audit_log = PricingAuditLog(
+            order_id=order.id,
+            actor_user_id=current_user.id,
+            action="pricing_unlocked",
+            details=f"Pricing unlocked for recalculation. Reason: {data.reason}",
+        )
+
+        db.add(audit_log)
+        db.commit()
+        db.refresh(order)
+
+        return OrderPricingResponse(
+            order_id=order.id,
+            items_count=len(order_items),
+            total_materials_cost=total_materials_cost,
+            total_labor_cost=total_labor_cost,
+            total_gross_price=total_gross_price,
+            total_discount_amount=total_discount_amount,
+            total_final_price=total_final_price,
+            total_profit=total_profit,
+            has_warning=has_warning,
+            warning_level=warning_level,
+            warning_message="; ".join(warning_messages) if warning_messages else None,
+        )
+
+    except HTTPException:
+        db.rollback()
+        raise
+
+    except Exception:
+        db.rollback()
+        raise
