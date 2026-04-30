@@ -23,12 +23,14 @@ from app.routes.car_type_pricing_rules import router as car_type_pricing_rules_r
 from app.routes.payments import router as payments_router
 from app.routes.order_checklist import router as order_checklist_router
 from fastapi.staticfiles import StaticFiles
-from app.routes.orders import router as orders_photos_router
+from app.routes.order_photos import router as orders_photos_router
+from pathlib import Path
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
+Path("uploads").mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 app.add_middleware(
