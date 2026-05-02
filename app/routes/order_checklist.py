@@ -89,16 +89,24 @@ def create_default_checklist_if_empty(
     db: Session,
     current_user: User,
 ) -> None:
-    existing_count = (
+    existing_items = (
         db.query(OrderChecklistItem)
         .filter(OrderChecklistItem.order_id == order.id)
-        .count()
+        .all()
     )
 
-    if existing_count > 0:
-        return
+    existing_keys = {
+        item.key
+        for item in existing_items
+        if item.key is not None
+    }
+
+    created_count = 0
 
     for item in DEFAULT_CHECKLIST_ITEMS:
+        if item["key"] in existing_keys:
+            continue
+
         db.add(
             OrderChecklistItem(
                 order_id=order.id,
@@ -111,6 +119,11 @@ def create_default_checklist_if_empty(
             )
         )
 
+        created_count += 1
+
+    if created_count == 0:
+        return
+
     audit_log = OrderChecklistAuditLog(
         order_id=order.id,
         checklist_item_id=None,
@@ -118,7 +131,7 @@ def create_default_checklist_if_empty(
         action="checklist_created",
         details=json.dumps(
             {
-                "items_count": len(DEFAULT_CHECKLIST_ITEMS),
+                "items_count": created_count,
                 "source": "default_template",
             },
             ensure_ascii=False,
@@ -127,6 +140,52 @@ def create_default_checklist_if_empty(
 
     db.add(audit_log)
     db.commit()
+
+
+def cleanup_duplicate_checklist_items(order_id: int, db: Session) -> None:
+    items = (
+        db.query(OrderChecklistItem)
+        .filter(OrderChecklistItem.order_id == order_id)
+        .order_by(OrderChecklistItem.sort_order.asc(), OrderChecklistItem.id.asc())
+        .all()
+    )
+
+    grouped: dict[str, list[OrderChecklistItem]] = {}
+
+    for item in items:
+        group_key = item.key or f"title:{item.title}"
+
+        if group_key not in grouped:
+            grouped[group_key] = []
+
+        grouped[group_key].append(item)
+
+    deleted_count = 0
+
+    for duplicates in grouped.values():
+        if len(duplicates) <= 1:
+            continue
+
+        # Оставляем лучший вариант:
+        # 1. выполненный пункт
+        # 2. с комментарием
+        # 3. самый старый id
+        keep_item = sorted(
+            duplicates,
+            key=lambda item: (
+                0 if item.status == "done" else 1,
+                0 if item.comment else 1,
+                item.id,
+            ),
+        )[0]
+
+        for item in duplicates:
+            if item.id != keep_item.id:
+                db.delete(item)
+                deleted_count += 1
+
+    if deleted_count > 0:
+        db.commit()
 
 
 def get_order_checklist_items(order_id: int, db: Session):
@@ -149,7 +208,9 @@ def get_order_checklist(
     current_user: User = Depends(require_permission("order_checklist.read")),
 ):
     order = ensure_order_exists(order_id, db)
+
     create_default_checklist_if_empty(order, db, current_user)
+    cleanup_duplicate_checklist_items(order.id, db)
 
     return get_order_checklist_items(order.id, db)
 

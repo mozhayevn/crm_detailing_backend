@@ -35,6 +35,11 @@ def maybe_complete_photo_checklist_item(
     db: Session,
     current_user: User,
 ) -> None:
+    order = db.query(Order).filter(Order.id == order_id).first()
+
+    if not order or order.status in ["canceled", "delivered"]:
+        return
+
     checklist_key_by_photo_type = {
         "before": "before_photos",
         "after": "after_photos",
@@ -106,12 +111,6 @@ def upload_order_photo(
 ):
     try:
         order = ensure_order_exists(order_id, db)
-
-        if order.status in ["canceled", "delivered"]:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot upload photos for order with status {order.status}",
-            )
 
         if photo_type not in VALID_PHOTO_TYPES:
             raise HTTPException(status_code=400, detail="Invalid photo type")

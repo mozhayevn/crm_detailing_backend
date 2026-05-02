@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas import ClientCreate, ClientResponse, ClientUpdate, OrderResponse, ClientHistoryItemResponse
+from app.schemas import ClientCreate, ClientResponse, ClientUpdate, OrderResponse, ClientHistoryItemResponse, CarResponse
 from app.deps import require_permission
-from app.models import Order, User, Client
+from app.models import Order, User, Client, Car
 
 router = APIRouter(prefix="/clients", tags=["Clients"])
 
@@ -148,3 +148,23 @@ def get_client_history(
         )
 
     return result
+
+
+@router.get("/{client_id}/cars", response_model=list[CarResponse])
+def get_client_cars(
+    client_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("clients.read")),
+):
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    cars = (
+        db.query(Car)
+        .filter(Car.client_id == client_id)
+        .order_by(Car.id.desc())
+        .all()
+    )
+
+    return cars
