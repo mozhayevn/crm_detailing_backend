@@ -89,13 +89,30 @@ def update_client(client_id: int, client_data: ClientUpdate, db: Session = Depen
 
 
 @router.delete("/{client_id}")
-def delete_client(client_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_permission("clients.delete"))):
+def delete_client(
+    client_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("clients.delete")),
+):
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
 
+    cars_count = db.query(Car).filter(Car.client_id == client_id).count()
+    orders_count = db.query(Order).filter(Order.client_id == client_id).count()
+
+    if cars_count > 0 or orders_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Client cannot be deleted because they have related cars or orders. "
+                "Archive/soft delete should be used instead."
+            ),
+        )
+
     db.delete(client)
     db.commit()
+
     return {"message": "Client deleted successfully"}
 
 
