@@ -54,6 +54,7 @@ def apply_order_filters(
     query,
     status: str | None = None,
     client_id: int | None = None,
+    car_id: int | None = None,
     phone: str | None = None,
     plate_number: str | None = None,
     work_bay_id: int | None = None,
@@ -64,6 +65,9 @@ def apply_order_filters(
 
     if client_id:
         query = query.filter(Order.client_id == client_id)
+
+    if car_id:
+        query = query.filter(Order.car_id == car_id)
 
     if work_bay_id:
         query = query.filter(Order.work_bay_id == work_bay_id)
@@ -354,6 +358,7 @@ def create_order(
 def get_orders(
     status: str | None = Query(None),
     client_id: int | None = Query(None),
+    car_id: int | None = Query(None),
     client_name: str | None = Query(None),
     phone: str | None = Query(None),
     plate_number: str | None = Query(None),
@@ -369,6 +374,9 @@ def get_orders(
 
     if client_id:
         query = query.filter(Order.client_id == client_id)
+
+    if car_id:
+        query = query.filter(Order.car_id == car_id)
 
     if work_bay_id:
         query = query.filter(Order.work_bay_id == work_bay_id)
