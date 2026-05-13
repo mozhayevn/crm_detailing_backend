@@ -174,16 +174,20 @@ class PriceByCarAndServiceResponse(BaseModel):
 class MaterialBrandCreate(BaseModel):
     name: str
     category: str | None = None
+    is_active: bool = True
 
 
 class MaterialBrandUpdate(BaseModel):
     name: str | None = None
+    category: str | None = None
+    is_active: bool | None = None
 
 
 class MaterialBrandResponse(BaseModel):
     id: int
     name: str
     category: str | None = None
+    is_active: bool
 
     class Config:
         from_attributes = True

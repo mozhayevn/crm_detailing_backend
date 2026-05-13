@@ -57,6 +57,7 @@ class MaterialBrand(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     category = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
 
 
 class ServicePackage(Base):

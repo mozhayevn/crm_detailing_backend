@@ -19,7 +19,11 @@ def create_material_brand(
     if existing:
         raise HTTPException(status_code=400, detail="Material brand already exists")
 
-    new_brand = MaterialBrand(name=brand.name)
+    new_brand = MaterialBrand(
+        name=brand.name,
+        category=brand.category,
+        is_active=brand.is_active,
+    )
     db.add(new_brand)
     db.commit()
     db.refresh(new_brand)
