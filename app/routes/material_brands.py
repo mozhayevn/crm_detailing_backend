@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import require_permission
-from app.models import MaterialBrand, User
+from app.models import MaterialBrand, User, Material, OrderItem, ServicePriceRule
 from app.schemas import MaterialBrandCreate, MaterialBrandUpdate, MaterialBrandResponse
 
 router = APIRouter(prefix="/material-brands", tags=["Material Brands"])
@@ -86,6 +86,35 @@ def delete_material_brand(
     if not brand:
         raise HTTPException(status_code=404, detail="Material brand not found")
 
+    materials_count = (
+        db.query(Material)
+        .filter(Material.brand_id == brand_id)
+        .count()
+    )
+
+    order_items_count = (
+        db.query(OrderItem)
+        .filter(OrderItem.material_brand_id == brand_id)
+        .count()
+    )
+
+    pricing_rules_count = (
+        db.query(ServicePriceRule)
+        .filter(ServicePriceRule.material_brand_id == brand_id)
+        .count()
+    )
+
+    if materials_count > 0 or order_items_count > 0 or pricing_rules_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Material brand cannot be deleted because it is already used "
+                "in materials, orders, or pricing rules. "
+                "Deactivate/archive should be used instead."
+            ),
+        )
+
     db.delete(brand)
     db.commit()
+
     return {"message": "Material brand deleted successfully"}

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import require_permission
-from app.models import Car, Client, CarType, User
+from app.models import Car, Client, CarType, User, Order
 from app.schemas import CarCreate, CarUpdate, CarResponse
 
 router = APIRouter(prefix="/cars", tags=["Cars"])
@@ -115,6 +115,18 @@ def delete_car(
     if not car:
         raise HTTPException(status_code=404, detail="Car not found")
 
+    orders_count = db.query(Order).filter(Order.car_id == car_id).count()
+
+    if orders_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Car cannot be deleted because it has related orders. "
+                "Archive/soft delete should be used instead."
+            ),
+        )
+
     db.delete(car)
     db.commit()
+
     return {"message": "Car deleted successfully"}
