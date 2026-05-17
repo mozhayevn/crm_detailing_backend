@@ -7,6 +7,7 @@ from app.models import OrderItem, OrderItemMaterial, Material, User, Order
 from app.schemas import OrderItemMaterialCreate, OrderItemMaterialResponse
 
 router = APIRouter(prefix="/order-item-materials", tags=["Order Item Materials"])
+TERMINAL_ORDER_STATUSES = {"canceled", "delivered"}
 
 
 @router.post("/{order_item_id}", response_model=OrderItemMaterialResponse)
@@ -27,9 +28,21 @@ def add_material_to_order_item(
     if order.pricing_locked:
         raise HTTPException(status_code=400, detail="Pricing is locked for this order")
 
+    if order.status in TERMINAL_ORDER_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="Materials cannot be changed for terminal orders",
+        )
+
     material = db.query(Material).filter(Material.id == data.material_id).first()
     if not material:
         raise HTTPException(status_code=404, detail="Material not found")
+
+    if not material.is_active:
+        raise HTTPException(
+            status_code=400,
+            detail="Archived material cannot be used in new consumption rows",
+        )
 
     if data.quantity <= 0:
         raise HTTPException(status_code=400, detail="Quantity must be greater than zero")
@@ -115,6 +128,12 @@ def delete_order_item_material(
 
     if order.pricing_locked:
         raise HTTPException(status_code=400, detail="Pricing is locked for this order")
+
+    if order.status in TERMINAL_ORDER_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="Materials cannot be changed for terminal orders",
+        )
 
     db.delete(row)
     db.commit()
