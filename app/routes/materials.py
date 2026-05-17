@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import require_permission
-from app.models import Material, MaterialBrand, Unit, User
+from app.models import Material, MaterialBrand, Unit, User, OrderItemMaterial
 from app.schemas import MaterialCreate, MaterialUpdate, MaterialResponse
 
 router = APIRouter(prefix="/materials", tags=["Materials"])
@@ -101,3 +101,34 @@ def update_material(
     db.commit()
     db.refresh(material)
     return material
+
+
+@router.delete("/{material_id}")
+def delete_material(
+    material_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("materials.manage")),
+):
+    material = db.query(Material).filter(Material.id == material_id).first()
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    usage_count = (
+        db.query(OrderItemMaterial)
+        .filter(OrderItemMaterial.material_id == material_id)
+        .count()
+    )
+
+    if usage_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Material cannot be deleted because it is already used "
+                "in order material consumption. Deactivate/archive should be used instead."
+            ),
+        )
+
+    db.delete(material)
+    db.commit()
+
+    return {"message": "Material deleted successfully"}
