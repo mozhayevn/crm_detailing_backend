@@ -165,6 +165,23 @@ def get_user_max_discount_percent(user: User, db: Session) -> int:
 
     return 0
 
+
+def ensure_service_can_be_used_for_order_item(
+    service: Service,
+    existing_order_item: OrderItem | None = None,
+):
+    if service.is_active:
+        return
+
+    if existing_order_item and existing_order_item.service_id == service.id:
+        return
+
+    raise HTTPException(
+        status_code=400,
+        detail="Archived service cannot be used in new order items",
+    )
+
+
 # =========================
 # BUILD ITEMS
 # =========================
@@ -182,6 +199,8 @@ def build_order_items_and_total(
         service = db.query(Service).filter(Service.id == item.service_id).first()
         if not service:
             raise HTTPException(status_code=404, detail="Service not found")
+
+        ensure_service_can_be_used_for_order_item(service)
 
         if service.requires_brand and item.material_brand_id is None:
             raise HTTPException(status_code=400, detail="Brand required")
@@ -558,6 +577,16 @@ def update_order(
         service = db.query(Service).filter(Service.id == item_data.service_id).first()
         if not service:
             raise HTTPException(status_code=404, detail="Service not found")
+
+        existing_item_for_validation = None
+
+        if item_data.id is not None:
+            existing_item_for_validation = existing_items.get(item_data.id)
+
+        ensure_service_can_be_used_for_order_item(
+            service,
+            existing_item_for_validation,
+        )
 
         if service.requires_brand and item_data.material_brand_id is None:
             raise HTTPException(status_code=400, detail="Brand required")

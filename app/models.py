@@ -49,6 +49,7 @@ class Service(Base):
     requires_brand = Column(Boolean, default=False)
     requires_package = Column(Boolean, default=False)
     base_labor_cost = Column(Integer, nullable=False, default=0)
+    is_active = Column(Boolean, default=True, nullable=False)
 
 
 class MaterialBrand(Base):

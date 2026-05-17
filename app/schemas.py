@@ -98,6 +98,7 @@ class ServiceCreate(BaseModel):
     requires_brand: bool = False
     requires_package: bool = False
     base_labor_cost: int = 0
+    is_active: bool = True
 
 
 class ServiceUpdate(BaseModel):
@@ -106,6 +107,7 @@ class ServiceUpdate(BaseModel):
     requires_brand: bool | None = None
     requires_package: bool | None = None
     base_labor_cost: int | None = None
+    is_active: bool | None = None
 
 
 class ServiceResponse(BaseModel):
@@ -115,6 +117,7 @@ class ServiceResponse(BaseModel):
     requires_brand: bool
     requires_package: bool
     base_labor_cost: int
+    is_active: bool
 
     class Config:
         from_attributes = True
