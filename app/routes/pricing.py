@@ -28,16 +28,55 @@ def find_service_price_rule(
     material_brand_id: int | None,
     service_package_id: int | None,
 ):
-    return (
-        db.query(ServicePriceRule)
-        .filter(
-            ServicePriceRule.service_id == service_id,
-            ServicePriceRule.car_type_id == car_type_id,
-            ServicePriceRule.material_brand_id == material_brand_id,
-            ServicePriceRule.service_package_id == service_package_id,
+    candidates = [
+        {
+            "material_brand_id": material_brand_id,
+            "service_package_id": service_package_id,
+        },
+        {
+            "material_brand_id": material_brand_id,
+            "service_package_id": None,
+        },
+        {
+            "material_brand_id": None,
+            "service_package_id": service_package_id,
+        },
+        {
+            "material_brand_id": None,
+            "service_package_id": None,
+        },
+    ]
+
+    seen_keys = set()
+
+    for candidate in candidates:
+        key = (
+            candidate["material_brand_id"],
+            candidate["service_package_id"],
         )
-        .first()
-    )
+
+        if key in seen_keys:
+            continue
+
+        seen_keys.add(key)
+
+        rule = (
+            db.query(ServicePriceRule)
+            .filter(
+                ServicePriceRule.service_id == service_id,
+                ServicePriceRule.car_type_id == car_type_id,
+                ServicePriceRule.material_brand_id
+                == candidate["material_brand_id"],
+                ServicePriceRule.service_package_id
+                == candidate["service_package_id"],
+            )
+            .first()
+        )
+
+        if rule:
+            return rule
+
+    return None
 
 
 def calculate_order_item_values(order_item_id: int, db: Session):

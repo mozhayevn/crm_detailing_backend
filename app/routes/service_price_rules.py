@@ -96,18 +96,6 @@ def validate_price_rule_entities(
             detail="Selected service does not require service package",
         )
 
-    if service.requires_brand and material_brand_id is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Material brand is required for selected service",
-        )
-
-    if service.requires_package and service_package_id is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Service package is required for selected service",
-        )
-
     return service, car_type, brand, package
 
 
