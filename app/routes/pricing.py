@@ -11,13 +11,33 @@ from app.models import (
     OrderItemMaterial,
     Car,
     Service,
+    ServicePriceRule,
     CarTypePricingRule,
     User,
-    PricingAuditLog
+    PricingAuditLog,
 )
 from app.schemas import OrderItemPricingResponse, OrderPricingResponse, PricingAuditLogResponse, PricingUnlockRequest
 
 router = APIRouter(prefix="/pricing", tags=["Pricing"])
+
+
+def find_service_price_rule(
+    db: Session,
+    service_id: int,
+    car_type_id: int,
+    material_brand_id: int | None,
+    service_package_id: int | None,
+):
+    return (
+        db.query(ServicePriceRule)
+        .filter(
+            ServicePriceRule.service_id == service_id,
+            ServicePriceRule.car_type_id == car_type_id,
+            ServicePriceRule.material_brand_id == material_brand_id,
+            ServicePriceRule.service_package_id == service_package_id,
+        )
+        .first()
+    )
 
 
 def calculate_order_item_values(order_item_id: int, db: Session):
@@ -58,7 +78,23 @@ def calculate_order_item_values(order_item_id: int, db: Session):
     multiplier = car_type_rule.multiplier
 
     base_cost = materials_cost + labor_cost
-    gross_price = base_cost * multiplier // 100
+
+    price_rule = find_service_price_rule(
+        db=db,
+        service_id=order_item.service_id,
+        car_type_id=car.car_type_id,
+        material_brand_id=order_item.material_brand_id,
+        service_package_id=order_item.service_package_id,
+    )
+
+    if price_rule:
+        gross_price = price_rule.price
+        pricing_source = "service_price_rule"
+        service_price_rule_id = price_rule.id
+    else:
+        gross_price = base_cost * multiplier // 100
+        pricing_source = "fallback_multiplier"
+        service_price_rule_id = None
 
     discount_percent = order_item.discount_percent or 0
     if discount_percent < 0 or discount_percent > 100:
@@ -95,6 +131,8 @@ def calculate_order_item_values(order_item_id: int, db: Session):
         "multiplier": multiplier,
         "base_cost": base_cost,
         "gross_price": gross_price,
+        "pricing_source": pricing_source,
+        "service_price_rule_id": service_price_rule_id,
         "discount_percent": discount_percent,
         "discount_amount": discount_amount,
         "final_price": final_price,
@@ -121,6 +159,8 @@ def calculate_order_item_pricing(
         materials_cost=result["materials_cost"],
         labor_cost=result["labor_cost"],
         car_type_multiplier=result["multiplier"],
+        pricing_source=result["pricing_source"],
+        service_price_rule_id=result["service_price_rule_id"],
         base_cost=result["base_cost"],
         gross_price=result["gross_price"],
         discount_percent=result["discount_percent"],
@@ -167,8 +207,33 @@ def calculate_order_pricing(
     warning_level = "none"
     warning_messages = []
 
+    item_summaries = []
+
     for item in order_items:
         result = calculate_order_item_values(item.id, db)
+
+        item_summaries.append(
+            {
+                "order_item_id": item.id,
+                "service_id": item.service_id,
+                "quantity": item.quantity,
+                "materials_cost": result["materials_cost"],
+                "labor_cost": result["labor_cost"],
+                "base_cost": result["base_cost"],
+                "car_type_multiplier": result["multiplier"],
+                "pricing_source": result["pricing_source"],
+                "service_price_rule_id": result["service_price_rule_id"],
+                "gross_price": result["gross_price"],
+                "discount_percent": result["discount_percent"],
+                "discount_amount": result["discount_amount"],
+                "final_price": result["final_price"],
+                "profit": result["profit"],
+                "has_warning": result["has_warning"],
+                "warning_level": result["warning_level"],
+                "warning_message": result["warning_message"],
+            }
+        )
+
         if result["has_warning"]:
             has_warning = True
             warning_messages.append(f"Order item #{item.id}: {result['warning_message']}")
@@ -196,6 +261,7 @@ def calculate_order_pricing(
         has_warning=has_warning,
         warning_level=warning_level,
         warning_message="; ".join(warning_messages) if warning_messages else None,
+        items=item_summaries,
     )
 
 
@@ -254,6 +320,8 @@ def apply_order_pricing(
                     "labor_cost": result["labor_cost"],
                     "base_cost": result["base_cost"],
                     "multiplier": result["multiplier"],
+                    "pricing_source": result["pricing_source"],
+                    "service_price_rule_id": result["service_price_rule_id"],
                     "gross_price": result["gross_price"],
                     "discount_percent": result["discount_percent"],
                     "discount_amount": result["discount_amount"],

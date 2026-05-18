@@ -632,7 +632,29 @@ class OrderItemPricingResponse(BaseModel):
     materials_cost: int
     labor_cost: int
     car_type_multiplier: int
+    pricing_source: str
+    service_price_rule_id: int | None = None
     base_cost: int
+    gross_price: int
+    discount_percent: int
+    discount_amount: int
+    final_price: int
+    profit: int
+    has_warning: bool
+    warning_level: str
+    warning_message: str | None = None
+
+
+class OrderPricingItemSummaryResponse(BaseModel):
+    order_item_id: int
+    service_id: int
+    quantity: int
+    materials_cost: int
+    labor_cost: int
+    base_cost: int
+    car_type_multiplier: int
+    pricing_source: str
+    service_price_rule_id: int | None = None
     gross_price: int
     discount_percent: int
     discount_amount: int
@@ -655,6 +677,7 @@ class OrderPricingResponse(BaseModel):
     has_warning: bool
     warning_level: str
     warning_message: str | None = None
+    items: list[OrderPricingItemSummaryResponse] = []
 
 
 class UserRoleAuditLogResponse(BaseModel):
