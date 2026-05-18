@@ -182,6 +182,25 @@ def ensure_service_can_be_used_for_order_item(
     )
 
 
+def ensure_service_package_can_be_used_for_order_item(
+    service_package: ServicePackage,
+    existing_order_item: OrderItem | None = None,
+):
+    if service_package.is_active:
+        return
+
+    if (
+        existing_order_item
+        and existing_order_item.service_package_id == service_package.id
+    ):
+        return
+
+    raise HTTPException(
+        status_code=400,
+        detail="Archived service package cannot be used in new order items",
+    )
+
+
 # =========================
 # BUILD ITEMS
 # =========================
@@ -214,9 +233,15 @@ def build_order_items_and_total(
                 raise HTTPException(status_code=404, detail="Material brand not found")
 
         if item.service_package_id is not None:
-            package = db.query(ServicePackage).filter(ServicePackage.id == item.service_package_id).first()
+            package = (
+                db.query(ServicePackage)
+                .filter(ServicePackage.id == item.service_package_id)
+                .first()
+            )
             if not package:
                 raise HTTPException(status_code=404, detail="Service package not found")
+
+            ensure_service_package_can_be_used_for_order_item(package)
 
         quantity = item.quantity or 1
         discount_percent = item.discount_percent or 0
@@ -600,9 +625,18 @@ def update_order(
                 raise HTTPException(status_code=404, detail="Material brand not found")
 
         if item_data.service_package_id is not None:
-            package = db.query(ServicePackage).filter(ServicePackage.id == item_data.service_package_id).first()
+            package = (
+                db.query(ServicePackage)
+                .filter(ServicePackage.id == item_data.service_package_id)
+                .first()
+            )
             if not package:
                 raise HTTPException(status_code=404, detail="Service package not found")
+
+            ensure_service_package_can_be_used_for_order_item(
+                package,
+                existing_item_for_validation,
+            )
 
         quantity = item_data.quantity or 1
         discount_percent = item_data.discount_percent or 0

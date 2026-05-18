@@ -68,6 +68,7 @@ class ServicePackage(Base):
     service_id = Column(Integer, ForeignKey("services.id"), nullable=False)
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=True)
 
     service = relationship("Service")
 

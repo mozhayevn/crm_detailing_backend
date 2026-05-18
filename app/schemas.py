@@ -201,12 +201,14 @@ class ServicePackageCreate(BaseModel):
     service_id: int
     name: str
     description: str | None = None
+    is_active: bool = True
 
 
 class ServicePackageUpdate(BaseModel):
     service_id: int | None = None
     name: str | None = None
     description: str | None = None
+    is_active: bool | None = None
 
 
 class ServicePackageResponse(BaseModel):
@@ -214,6 +216,7 @@ class ServicePackageResponse(BaseModel):
     service_id: int
     name: str
     description: str | None = None
+    is_active: bool
 
     class Config:
         from_attributes = True

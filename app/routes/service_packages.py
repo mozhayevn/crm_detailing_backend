@@ -44,6 +44,7 @@ def create_service_package(
         service_id=data.service_id,
         name=data.name,
         description=data.description,
+        is_active=data.is_active,
     )
     db.add(package)
     db.commit()
