@@ -3,7 +3,13 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import require_permission
-from app.models import ServicePackage, Service, User
+from app.models import (
+    ServicePackage,
+    Service,
+    OrderItem,
+    ServicePriceRule,
+    User,
+)
 from app.schemas import (
     ServicePackageCreate,
     ServicePackageUpdate,
@@ -119,6 +125,28 @@ def delete_service_package(
     if not package:
         raise HTTPException(status_code=404, detail="Service package not found")
 
+    order_items_count = (
+        db.query(OrderItem)
+        .filter(OrderItem.service_package_id == package_id)
+        .count()
+    )
+
+    pricing_rules_count = (
+        db.query(ServicePriceRule)
+        .filter(ServicePriceRule.service_package_id == package_id)
+        .count()
+    )
+
+    if order_items_count > 0 or pricing_rules_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Service package cannot be deleted because it is already used "
+                "in orders or pricing rules. Archive/deactivate should be used instead."
+            ),
+        )
+
     db.delete(package)
     db.commit()
+
     return {"message": "Service package deleted successfully"}
