@@ -264,6 +264,38 @@ class OrderItemMaterial(Base):
     material = relationship("Material")
 
 
+class MaterialStockMovement(Base):
+    __tablename__ = "material_stock_movements"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    material_id = Column(Integer, ForeignKey("materials.id"), nullable=False)
+    order_item_material_id = Column(
+        Integer,
+        ForeignKey("order_item_materials.id"),
+        nullable=True,
+    )
+
+    movement_type = Column(String, nullable=False)
+    quantity = Column(Integer, nullable=False)
+
+    unit_cost = Column(Integer, nullable=False, default=0)
+    total_cost = Column(Integer, nullable=False, default=0)
+
+    comment = Column(Text, nullable=True)
+
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    material = relationship("Material")
+    order_item_material = relationship("OrderItemMaterial")
+    created_by_user = relationship("User")
+
+    @property
+    def created_by_user_full_name(self) -> str | None:
+        return self.created_by_user.full_name if self.created_by_user else None
+
+
 class CarTypePricingRule(Base):
     __tablename__ = "car_type_pricing_rules"
 

@@ -306,6 +306,41 @@ class OrderItemResponse(BaseModel):
         from_attributes = True
 
 
+class MaterialStockMovementCreate(BaseModel):
+    movement_type: str
+    quantity: int
+    unit_cost: int | None = None
+    comment: str | None = None
+
+
+class MaterialStockMovementResponse(BaseModel):
+    id: int
+    material_id: int
+    order_item_material_id: int | None = None
+    movement_type: str
+    quantity: int
+    unit_cost: int
+    total_cost: int
+    comment: str | None = None
+    created_by_user_id: int
+    created_by_user_full_name: str | None = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class MaterialStockSummaryResponse(BaseModel):
+    material_id: int
+    material_name: str | None = None
+    unit_id: int
+    unit_name: str | None = None
+    unit_code: str | None = None
+    current_quantity: int
+    stock_value: int
+    last_unit_cost: int | None = None
+
+
 class OrderResponse(BaseModel):
     id: int
     client_id: int
