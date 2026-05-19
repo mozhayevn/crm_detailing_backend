@@ -139,6 +139,20 @@ def create_order_payment(
                 detail="Payment amount must be greater than zero",
             )
 
+        summary_before = get_payment_summary_data(order.id, db)
+
+        if summary_before["payment_status"] == "paid":
+            raise HTTPException(
+                status_code=400,
+                detail="Order is already fully paid",
+            )
+
+        if data.amount > summary_before["remaining_amount"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Payment amount exceeds remaining order balance",
+            )
+
         if data.method not in VALID_PAYMENT_METHODS:
             raise HTTPException(
                 status_code=400,
