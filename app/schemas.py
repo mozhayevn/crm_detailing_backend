@@ -902,3 +902,25 @@ class OrderPhotoResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class RecentAuditEventResponse(BaseModel):
+    id: str
+    source: str
+    source_label: str
+    action: str
+    action_label: str
+
+    actor_user_id: int
+    actor_user_full_name: str | None = None
+
+    order_id: int | None = None
+    payment_id: int | None = None
+    checklist_item_id: int | None = None
+    target_user_id: int | None = None
+    target_user_full_name: str | None = None
+    role_id: int | None = None
+    role_name: str | None = None
+
+    details: str | None = None
+    created_at: datetime
