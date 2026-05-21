@@ -52,6 +52,15 @@ def get_period_start(period: str) -> datetime | None:
     return now - timedelta(days=7)
 
 
+def get_first_order_date(db: Session) -> date | None:
+    first_created_at = db.query(func.min(Order.created_at)).scalar()
+
+    if not first_created_at:
+        return None
+
+    return first_created_at.date()
+
+
 def apply_order_period(query, period_start: datetime | None):
     if period_start is None:
         return query
@@ -82,8 +91,8 @@ def get_orders_by_day_range(period: str) -> int:
     if period == "30d":
         return 30
 
-    if period == "all":
-        return 14
+    if period == "7d":
+        return 7
 
     return 7
 
@@ -226,16 +235,36 @@ def get_dashboard_summary(
 
     today = date.today()
     orders_by_day = []
-    days_range = get_orders_by_day_range(period)
 
-    for index in range(days_range - 1, -1, -1):
-        target_date = today - timedelta(days=index)
-        orders_by_day.append(
-            DashboardMetricResponse(
-                label=target_date.strftime("%d.%m"),
-                value=get_order_count_for_day(db, target_date),
+    if period == "all":
+        first_order_date = get_first_order_date(db)
+
+        if first_order_date is None:
+            chart_start_date = today
+        else:
+            chart_start_date = first_order_date
+
+        days_range = (today - chart_start_date).days + 1
+
+        for index in range(days_range):
+            target_date = chart_start_date + timedelta(days=index)
+            orders_by_day.append(
+                DashboardMetricResponse(
+                    label=target_date.strftime("%d.%m"),
+                    value=get_order_count_for_day(db, target_date),
+                )
             )
-        )
+    else:
+        days_range = get_orders_by_day_range(period)
+
+        for index in range(days_range - 1, -1, -1):
+            target_date = today - timedelta(days=index)
+            orders_by_day.append(
+                DashboardMetricResponse(
+                    label=target_date.strftime("%d.%m"),
+                    value=get_order_count_for_day(db, target_date),
+                )
+            )
 
     orders_summary = DashboardOrdersSummaryResponse(
         total=total_orders,
