@@ -491,6 +491,7 @@ class UserCreate(BaseModel):
     is_super_admin: bool = False
     is_active: bool = True
     must_change_password: bool = False
+    role_ids: list[int] = []
 
 
 class UserResponse(BaseModel):

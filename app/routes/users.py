@@ -73,6 +73,27 @@ def create_user(
             detail="Only super admin can create another super admin"
         )
 
+    selected_roles = []
+
+    if user_data.role_ids:
+        selected_roles = db.query(Role).filter(Role.id.in_(user_data.role_ids)).all()
+
+        found_role_ids = {role.id for role in selected_roles}
+        missing_role_ids = set(user_data.role_ids) - found_role_ids
+
+        if missing_role_ids:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Roles not found: {sorted(missing_role_ids)}",
+            )
+
+        for role in selected_roles:
+            if not can_assign_role(current_user, role.name, db):
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"You cannot assign role '{role.name}'",
+                )
+
     user = User(
         full_name=user_data.full_name,
         email=user_data.email,
@@ -82,9 +103,9 @@ def create_user(
         is_super_admin=user_data.is_super_admin,
         must_change_password=user_data.must_change_password,
     )
+
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    db.flush()
 
     audit_log = UserRoleAuditLog(
         actor_user_id=current_user.id,
@@ -94,7 +115,26 @@ def create_user(
         details=f"User {user.email} was created",
     )
     db.add(audit_log)
+
+    for role in selected_roles:
+        user_role = UserRole(
+            user_id=user.id,
+            role_id=role.id,
+        )
+        db.add(user_role)
+
+        role_audit_log = UserRoleAuditLog(
+            actor_user_id=current_user.id,
+            target_user_id=user.id,
+            role_id=role.id,
+            action="role_assigned",
+            details=f"Role '{role.name}' assigned to user {user.email} during user creation",
+        )
+        db.add(role_audit_log)
+
     db.commit()
+    db.refresh(user)
+
     return user
 
 
