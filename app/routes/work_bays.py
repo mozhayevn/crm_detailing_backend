@@ -39,6 +39,49 @@ def get_work_bays(
     return db.query(WorkBay).order_by(WorkBay.id.desc()).all()
 
 
+@router.get("/available", response_model=list[WorkBayAvailabilityResponse])
+def get_available_work_bays(
+    planned_start_at: datetime = Query(...),
+    planned_end_at: datetime = Query(...),
+    exclude_order_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("work_bays.read")),
+):
+    if planned_start_at >= planned_end_at:
+        raise HTTPException(status_code=400, detail="planned_end_at must be greater than planned_start_at")
+
+    bays = db.query(WorkBay).order_by(WorkBay.id.asc()).all()
+    result = []
+
+    for bay in bays:
+        query = db.query(Order).filter(
+            Order.work_bay_id == bay.id,
+            Order.planned_start_at.isnot(None),
+            Order.planned_end_at.isnot(None),
+            Order.status != "canceled",
+            Order.status != "delivered",
+            Order.planned_start_at < planned_end_at,
+            Order.planned_end_at > planned_start_at,
+        )
+
+        if exclude_order_id is not None:
+            query = query.filter(Order.id != exclude_order_id)
+
+        conflict = query.first()
+
+        result.append(
+            WorkBayAvailabilityResponse(
+                id=bay.id,
+                name=bay.name,
+                description=bay.description,
+                is_available=conflict is None,
+                conflicting_order_id=conflict.id if conflict else None,
+            )
+        )
+
+    return result
+
+
 @router.get("/{bay_id}", response_model=WorkBayResponse)
 def get_work_bay(
     bay_id: int,
@@ -94,46 +137,3 @@ def delete_work_bay(
     db.delete(bay)
     db.commit()
     return {"message": "Work bay deleted successfully"}
-
-
-@router.get("/available", response_model=list[WorkBayAvailabilityResponse])
-def get_available_work_bays(
-    planned_start_at: datetime = Query(...),
-    planned_end_at: datetime = Query(...),
-    exclude_order_id: int | None = Query(None),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission("work_bays.read")),
-):
-    if planned_start_at >= planned_end_at:
-        raise HTTPException(status_code=400, detail="planned_end_at must be greater than planned_start_at")
-
-    bays = db.query(WorkBay).order_by(WorkBay.id.asc()).all()
-    result = []
-
-    for bay in bays:
-        query = db.query(Order).filter(
-            Order.work_bay_id == bay.id,
-            Order.planned_start_at.isnot(None),
-            Order.planned_end_at.isnot(None),
-            Order.status != "canceled",
-            Order.status != "delivered",
-            Order.planned_start_at < planned_end_at,
-            Order.planned_end_at > planned_start_at,
-        )
-
-        if exclude_order_id is not None:
-            query = query.filter(Order.id != exclude_order_id)
-
-        conflict = query.first()
-
-        result.append(
-            WorkBayAvailabilityResponse(
-                id=bay.id,
-                name=bay.name,
-                description=bay.description,
-                is_available=conflict is None,
-                conflicting_order_id=conflict.id if conflict else None,
-            )
-        )
-
-    return result
