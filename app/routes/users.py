@@ -143,7 +143,12 @@ def get_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("users.manage")),
 ):
-    return db.query(User).order_by(User.id.desc()).all()
+    query = db.query(User)
+
+    if not current_user.is_super_admin:
+        query = query.filter(User.is_super_admin == False)
+
+    return query.order_by(User.id.desc()).all()
 
 
 @router.get("/{user_id}", response_model=UserResponse)
@@ -153,8 +158,13 @@ def get_user(
     current_user: User = Depends(require_permission("users.manage")),
 ):
     user = db.query(User).filter(User.id == user_id).first()
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    if user.is_super_admin and not current_user.is_super_admin:
+        raise HTTPException(status_code=404, detail="User not found")
+
     return user
 
 
@@ -166,6 +176,9 @@ def get_user_permissions_view(
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.is_super_admin and not current_user.is_super_admin:
         raise HTTPException(status_code=404, detail="User not found")
 
     direct_roles = get_user_roles(user.id, db)

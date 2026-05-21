@@ -925,3 +925,56 @@ class RecentAuditEventResponse(BaseModel):
 
     details: str | None = None
     created_at: datetime
+
+
+class DashboardMetricResponse(BaseModel):
+    label: str
+    value: int
+
+
+class DashboardOrdersSummaryResponse(BaseModel):
+    total: int
+    new_count: int
+    in_progress_count: int
+    completed_count: int
+    canceled_count: int
+    delivered_count: int
+    active_count: int
+
+
+class DashboardFinanceSummaryResponse(BaseModel):
+    total_price: int
+    paid_amount: int
+    remaining_amount: int
+    total_profit: int
+
+
+class DashboardProductionSummaryResponse(BaseModel):
+    active_orders: int
+    orders_without_work_bay: int
+    orders_without_master: int
+    orders_without_locked_pricing: int
+    orders_with_unfinished_checklist: int
+
+
+class DashboardInventorySummaryResponse(BaseModel):
+    total_stock_value: int
+    in_stock_count: int
+    low_stock_count: int
+    out_of_stock_count: int
+
+
+class DashboardChartsResponse(BaseModel):
+    orders_by_status: list[DashboardMetricResponse]
+    finance_breakdown: list[DashboardMetricResponse]
+    inventory_status: list[DashboardMetricResponse]
+    production_health: list[DashboardMetricResponse]
+    orders_by_day: list[DashboardMetricResponse]
+
+
+class DashboardSummaryResponse(BaseModel):
+    orders: DashboardOrdersSummaryResponse
+    finance: DashboardFinanceSummaryResponse
+    production: DashboardProductionSummaryResponse
+    inventory: DashboardInventorySummaryResponse
+    charts: DashboardChartsResponse
