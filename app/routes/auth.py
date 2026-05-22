@@ -2,14 +2,51 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from typing import Optional
+from datetime import datetime
+import hashlib
 
 from app.database import get_db
 from app.deps import get_current_active_user, get_user_roles, get_user_permissions
-from app.models import User
+from app.models import User, UserSession
 from app.schemas import LoginRequest, Token, UserResponse, MyPermissionsResponse
 from app.security import verify_password, create_access_token
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+
+def make_token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def get_request_ip(request: Request) -> str | None:
+    forwarded_for = request.headers.get("x-forwarded-for")
+
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+
+    if request.client:
+        return request.client.host
+
+    return None
+
+
+def create_user_session(
+    user: User,
+    access_token: str,
+    request: Request,
+    db: Session,
+) -> None:
+    session = UserSession(
+        user_id=user.id,
+        token_hash=make_token_hash(access_token),
+        user_agent=request.headers.get("user-agent"),
+        ip_address=get_request_ip(request),
+        is_active=True,
+        created_at=datetime.utcnow(),
+        last_seen_at=datetime.utcnow(),
+    )
+
+    db.add(session)
+    db.commit()
 
 
 def authenticate_user(email: str, password: str, db: Session) -> User:
@@ -34,9 +71,15 @@ def authenticate_user(email: str, password: str, db: Session) -> User:
 
 
 @router.post("/login", response_model=Token)
-def login_json(data: LoginRequest, db: Session = Depends(get_db)):
+def login_json(
+    data: LoginRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
     user = authenticate_user(data.email, data.password, db)
     access_token = create_access_token(subject=str(user.id))
+
+    create_user_session(user, access_token, request, db)
 
     return {
         "access_token": access_token,
@@ -47,21 +90,23 @@ def login_json(data: LoginRequest, db: Session = Depends(get_db)):
 @router.post("/login-form", response_model=Token)
 def login_form(
     response: Response,
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
     user = authenticate_user(form_data.username, form_data.password, db)
     access_token = create_access_token(subject=str(user.id))
 
-    # NEW: cookie для web-клиента
+    create_user_session(user, access_token, request, db)
+
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
         samesite="lax",
-        secure=False,   # True на https
+        secure=False,
         path="/",
-        max_age=60 * 60 * 24
+        max_age=60 * 60 * 24,
     )
 
     return {"access_token": access_token, "token_type": "bearer"}

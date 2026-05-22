@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime, date
 
 
@@ -978,3 +978,55 @@ class DashboardSummaryResponse(BaseModel):
     production: DashboardProductionSummaryResponse
     inventory: DashboardInventorySummaryResponse
     charts: DashboardChartsResponse
+
+
+class ProfileResponse(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    phone: str | None = None
+    avatar_url: str | None = None
+    is_active: bool
+    is_super_admin: bool
+    must_change_password: bool
+    created_at: datetime
+
+    privacy_show_phone: bool
+    privacy_show_email: bool
+    privacy_show_activity: bool
+    privacy_show_online_status: bool
+    privacy_show_order_load: bool
+    privacy_show_audit_history: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProfileUpdateRequest(BaseModel):
+    full_name: str | None = None
+    phone: str | None = None
+
+
+class ProfilePrivacyUpdateRequest(BaseModel):
+    privacy_show_phone: bool
+    privacy_show_email: bool
+    privacy_show_activity: bool
+    privacy_show_online_status: bool
+    privacy_show_order_load: bool
+    privacy_show_audit_history: bool
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class UserSessionResponse(BaseModel):
+    id: int
+    user_agent: str | None = None
+    ip_address: str | None = None
+    is_active: bool
+    created_at: datetime
+    last_seen_at: datetime | None = None
+    revoked_at: datetime | None = None
+
+    model_config = ConfigDict(from_attributes=True)

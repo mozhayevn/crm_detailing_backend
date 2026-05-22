@@ -132,6 +132,15 @@ class User(Base):
     must_change_password = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    avatar_url = Column(String, nullable=True)
+
+    privacy_show_phone = Column(Boolean, nullable=False, default=True)
+    privacy_show_email = Column(Boolean, nullable=False, default=True)
+    privacy_show_activity = Column(Boolean, nullable=False, default=True)
+    privacy_show_online_status = Column(Boolean, nullable=False, default=True)
+    privacy_show_order_load = Column(Boolean, nullable=False, default=True)
+    privacy_show_audit_history = Column(Boolean, nullable=False, default=True)
+
     #roles = relationship("Role", secondary="user_roles", back_populates="users")
 
 
@@ -144,6 +153,22 @@ class UserRole(Base):
 
     user = relationship("User")
     role = relationship("Role")
+
+
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    token_hash = Column(String, nullable=False, index=True)
+    user_agent = Column(Text, nullable=True)
+    ip_address = Column(String, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_seen_at = Column(DateTime, default=datetime.utcnow)
+    revoked_at = Column(DateTime, nullable=True)
+
+    user = relationship("User")
 
 
 class WorkBay(Base):
