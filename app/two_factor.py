@@ -7,6 +7,7 @@ from email.message import EmailMessage
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models import TwoFactorChallenge, User
 
 
@@ -84,11 +85,72 @@ def create_two_factor_challenge(
 
 
 def send_two_factor_email(email: str, code: str) -> None:
-    """
-    Для локальной разработки код просто печатается в консоль.
-    Позже можно подключить SMTP через env.
-    """
-    print(f"[2FA] Email code for {email}: {code}")
+    subject = "Код подтверждения входа в Imperial CRM"
+
+    text_body = f"""
+Ваш код подтверждения входа в Imperial CRM: {code}
+
+Код действует ограниченное время.
+Если вы не пытались войти в CRM, просто проигнорируйте это письмо.
+"""
+
+    html_body = f"""
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#0f172a;font-family:Arial,sans-serif;color:#e5e7eb;">
+    <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
+      <div style="border:1px solid rgba(45,212,191,0.22);background:rgba(15,23,42,0.92);border-radius:24px;padding:28px;">
+        <div style="font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:#5eead4;font-weight:700;">
+          Imperial CRM
+        </div>
+
+        <h1 style="margin:18px 0 8px;font-size:24px;line-height:32px;color:#ffffff;">
+          Код подтверждения входа
+        </h1>
+
+        <p style="margin:0 0 22px;font-size:14px;line-height:22px;color:#94a3b8;">
+          Введите этот код на странице входа, чтобы подтвердить доступ к аккаунту.
+        </p>
+
+        <div style="margin:24px 0;padding:20px;border-radius:20px;background:rgba(45,212,191,0.10);border:1px solid rgba(45,212,191,0.25);text-align:center;">
+          <div style="font-size:34px;letter-spacing:10px;font-weight:800;color:#ffffff;">
+            {code}
+          </div>
+        </div>
+
+        <p style="margin:0;font-size:13px;line-height:21px;color:#94a3b8;">
+          Код действует ограниченное время. Если вы не пытались войти в CRM,
+          просто проигнорируйте это письмо.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
+"""
+
+    if not settings.SMTP_HOST or not settings.SMTP_FROM_EMAIL:
+        print(f"[2FA] Email code for {email}: {code}")
+        return
+
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_FROM_EMAIL}>"
+    message["To"] = email
+    message.set_content(text_body)
+    message.add_alternative(html_body, subtype="html")
+
+    try:
+        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as smtp:
+            if settings.SMTP_USE_TLS:
+                smtp.starttls()
+
+            if settings.SMTP_USERNAME and settings.SMTP_PASSWORD:
+                smtp.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+
+            smtp.send_message(message)
+    except Exception as error:
+        print(f"[2FA] Failed to send email to {email}: {error}")
+        print(f"[2FA] Fallback code for {email}: {code}")
 
 
 def validate_two_factor_challenge(
