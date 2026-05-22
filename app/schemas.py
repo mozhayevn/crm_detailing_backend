@@ -504,6 +504,10 @@ class UserResponse(BaseModel):
     is_super_admin: bool
     must_change_password: bool
     created_at: datetime
+    two_factor_enabled: bool
+    two_factor_method: str | None = None
+    email_verified: bool
+    phone_verified: bool
 
     class Config:
         from_attributes = True
@@ -999,6 +1003,11 @@ class ProfileResponse(BaseModel):
     privacy_show_order_load: bool
     privacy_show_audit_history: bool
 
+    two_factor_enabled: bool
+    two_factor_method: str | None = None
+    email_verified: bool
+    phone_verified: bool
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -1031,3 +1040,39 @@ class UserSessionResponse(BaseModel):
     revoked_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class LoginResponse(BaseModel):
+    access_token: str | None = None
+    token_type: str | None = None
+
+    requires_2fa: bool = False
+    challenge_id: int | None = None
+    method: str | None = None
+    destination_masked: str | None = None
+
+
+class VerifyTwoFactorRequest(BaseModel):
+    challenge_id: int
+    code: str
+
+
+class TwoFactorStatusResponse(BaseModel):
+    enabled: bool
+    method: str | None = None
+    destination_masked: str | None = None
+    email_verified: bool
+    phone_verified: bool
+
+
+class TwoFactorSendCodeRequest(BaseModel):
+    method: str = "email"
+
+
+class TwoFactorEnableRequest(BaseModel):
+    challenge_id: int
+    code: str
+
+
+class TwoFactorDisableRequest(BaseModel):
+    current_password: str

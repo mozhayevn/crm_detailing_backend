@@ -18,6 +18,18 @@ from app.schemas import (
     UserSessionResponse,
 )
 from app.security import get_password_hash, verify_password
+from app.schemas import (
+    TwoFactorDisableRequest,
+    TwoFactorEnableRequest,
+    TwoFactorSendCodeRequest,
+    TwoFactorStatusResponse,
+)
+from app.two_factor import (
+    create_two_factor_challenge,
+    mask_email,
+    send_two_factor_email,
+    validate_two_factor_challenge,
+)
 
 router = APIRouter(prefix="/profile", tags=["Profile"])
 
@@ -229,3 +241,98 @@ def revoke_my_session(
     db.commit()
 
     return {"message": "Session revoked"}
+
+
+@router.get("/2fa/status", response_model=TwoFactorStatusResponse)
+def get_two_factor_status(
+    current_user: User = Depends(get_current_active_user),
+):
+    return TwoFactorStatusResponse(
+        enabled=current_user.two_factor_enabled,
+        method=current_user.two_factor_method,
+        destination_masked=mask_email(current_user.email),
+        email_verified=current_user.email_verified,
+        phone_verified=current_user.phone_verified,
+    )
+
+
+@router.post("/2fa/send-code")
+def send_two_factor_setup_code(
+    data: TwoFactorSendCodeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if data.method != "email":
+        raise HTTPException(
+            status_code=400,
+            detail="Only email 2FA is available now",
+        )
+
+    challenge, code = create_two_factor_challenge(
+        db=db,
+        user=current_user,
+        method="email",
+    )
+
+    send_two_factor_email(current_user.email, code)
+
+    return {
+        "challenge_id": challenge.id,
+        "method": "email",
+        "destination_masked": mask_email(current_user.email),
+    }
+
+
+@router.post("/2fa/enable", response_model=TwoFactorStatusResponse)
+def enable_two_factor(
+    data: TwoFactorEnableRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    verified_user = validate_two_factor_challenge(
+        db=db,
+        challenge_id=data.challenge_id,
+        code=data.code,
+    )
+
+    if verified_user.id != current_user.id:
+        raise HTTPException(status_code=403, detail="Invalid 2FA challenge")
+
+    current_user.two_factor_enabled = True
+    current_user.two_factor_method = "email"
+    current_user.email_verified = True
+
+    db.commit()
+    db.refresh(current_user)
+
+    return TwoFactorStatusResponse(
+        enabled=current_user.two_factor_enabled,
+        method=current_user.two_factor_method,
+        destination_masked=mask_email(current_user.email),
+        email_verified=current_user.email_verified,
+        phone_verified=current_user.phone_verified,
+    )
+
+
+@router.post("/2fa/disable", response_model=TwoFactorStatusResponse)
+def disable_two_factor(
+    data: TwoFactorDisableRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if not verify_password(data.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    current_user.two_factor_enabled = False
+    current_user.two_factor_method = None
+
+    db.commit()
+    db.refresh(current_user)
+
+    return TwoFactorStatusResponse(
+        enabled=current_user.two_factor_enabled,
+        method=current_user.two_factor_method,
+        destination_masked=mask_email(current_user.email),
+        email_verified=current_user.email_verified,
+        phone_verified=current_user.phone_verified,
+    )

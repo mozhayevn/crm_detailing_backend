@@ -141,6 +141,11 @@ class User(Base):
     privacy_show_order_load = Column(Boolean, nullable=False, default=True)
     privacy_show_audit_history = Column(Boolean, nullable=False, default=True)
 
+    two_factor_enabled = Column(Boolean, nullable=False, default=False)
+    two_factor_method = Column(String, nullable=True)
+    email_verified = Column(Boolean, nullable=False, default=False)
+    phone_verified = Column(Boolean, nullable=False, default=False)
+
     #roles = relationship("Role", secondary="user_roles", back_populates="users")
 
 
@@ -167,6 +172,23 @@ class UserSession(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     last_seen_at = Column(DateTime, default=datetime.utcnow)
     revoked_at = Column(DateTime, nullable=True)
+
+    user = relationship("User")
+
+
+class TwoFactorChallenge(Base):
+    __tablename__ = "two_factor_challenges"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    method = Column(String, nullable=False)
+    destination = Column(String, nullable=False)
+    code_hash = Column(String, nullable=False)
+    is_used = Column(Boolean, nullable=False, default=False)
+    attempts_count = Column(Integer, nullable=False, default=0)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    used_at = Column(DateTime, nullable=True)
 
     user = relationship("User")
 

@@ -8,10 +8,24 @@ import hashlib
 from app.database import get_db
 from app.deps import get_current_active_user, get_user_roles, get_user_permissions
 from app.models import User, UserSession
-from app.schemas import LoginRequest, Token, UserResponse, MyPermissionsResponse
+from app.schemas import (
+    LoginRequest,
+    LoginResponse,
+    MyPermissionsResponse,
+    Token,
+    UserResponse,
+    VerifyTwoFactorRequest,
+)
 from app.security import verify_password, create_access_token
+from app.two_factor import (
+    create_two_factor_challenge,
+    mask_email,
+    send_two_factor_email,
+    validate_two_factor_challenge,
+)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+
 
 def make_token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
@@ -49,6 +63,41 @@ def create_user_session(
     db.commit()
 
 
+def finish_login(
+    user: User,
+    request: Request,
+    db: Session,
+) -> dict:
+    access_token = create_access_token(subject=str(user.id))
+    create_user_session(user, access_token, request, db)
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "requires_2fa": False,
+    }
+
+
+def start_two_factor_login(
+    user: User,
+    db: Session,
+) -> dict:
+    challenge, code = create_two_factor_challenge(
+        db=db,
+        user=user,
+        method=user.two_factor_method or "email",
+    )
+
+    send_two_factor_email(user.email, code)
+
+    return {
+        "requires_2fa": True,
+        "challenge_id": challenge.id,
+        "method": challenge.method,
+        "destination_masked": mask_email(user.email),
+    }
+
+
 def authenticate_user(email: str, password: str, db: Session) -> User:
     user = db.query(User).filter(User.email == email).first()
 
@@ -70,24 +119,21 @@ def authenticate_user(email: str, password: str, db: Session) -> User:
     return user
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=LoginResponse)
 def login_json(
     data: LoginRequest,
     request: Request,
     db: Session = Depends(get_db),
 ):
     user = authenticate_user(data.email, data.password, db)
-    access_token = create_access_token(subject=str(user.id))
 
-    create_user_session(user, access_token, request, db)
+    if user.two_factor_enabled:
+        return start_two_factor_login(user, db)
 
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-    }
+    return finish_login(user, request, db)
 
 
-@router.post("/login-form", response_model=Token)
+@router.post("/login-form", response_model=LoginResponse)
 def login_form(
     response: Response,
     request: Request,
@@ -95,8 +141,39 @@ def login_form(
     db: Session = Depends(get_db),
 ):
     user = authenticate_user(form_data.username, form_data.password, db)
-    access_token = create_access_token(subject=str(user.id))
 
+    if user.two_factor_enabled:
+        return start_two_factor_login(user, db)
+
+    result = finish_login(user, request, db)
+
+    response.set_cookie(
+        key="access_token",
+        value=result["access_token"],
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        path="/",
+        max_age=60 * 60 * 24,
+    )
+
+    return result
+
+
+@router.post("/verify-2fa", response_model=Token)
+def verify_two_factor_login(
+    data: VerifyTwoFactorRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    user = validate_two_factor_challenge(
+        db=db,
+        challenge_id=data.challenge_id,
+        code=data.code,
+    )
+
+    access_token = create_access_token(subject=str(user.id))
     create_user_session(user, access_token, request, db)
 
     response.set_cookie(
@@ -109,7 +186,10 @@ def login_form(
         max_age=60 * 60 * 24,
     )
 
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+    }
 
 
 @router.get("/me", response_model=UserResponse)
