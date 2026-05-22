@@ -499,6 +499,7 @@ class UserResponse(BaseModel):
     full_name: str
     email: str
     phone: str | None = None
+    avatar_url: str | None = None
     is_active: bool
     is_super_admin: bool
     must_change_password: bool

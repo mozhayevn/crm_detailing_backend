@@ -1,3 +1,6 @@
+import hashlib
+from datetime import datetime
+
 from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
@@ -5,9 +8,20 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.models import User, Role, UserRole, RolePermission, Permission
+from app.models import (
+    User,
+    Role,
+    UserRole,
+    RolePermission,
+    Permission,
+    UserSession,
+)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login-form", auto_error=False)
+
+
+def make_token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def get_token_from_request(
@@ -19,7 +33,10 @@ def get_token_from_request(
     return request.cookies.get("access_token")
 
 
-def get_current_user(token: str | None = Depends(get_token_from_request), db: Session = Depends(get_db)) -> User:
+def get_current_user(
+    token: str | None = Depends(get_token_from_request),
+    db: Session = Depends(get_db),
+) -> User:
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -40,14 +57,36 @@ def get_current_user(token: str | None = Depends(get_token_from_request), db: Se
             algorithms=[settings.ALGORITHM],
         )
         user_id: str | None = payload.get("sub")
+
         if user_id is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
 
     user = db.query(User).filter(User.id == int(user_id)).first()
+
     if not user:
         raise credentials_exception
+
+    token_hash = make_token_hash(token)
+
+    session = (
+        db.query(UserSession)
+        .filter(
+            UserSession.user_id == user.id,
+            UserSession.token_hash == token_hash,
+        )
+        .first()
+    )
+
+    if not session:
+        raise credentials_exception
+
+    if not session.is_active:
+        raise credentials_exception
+
+    session.last_seen_at = datetime.utcnow()
+    db.commit()
 
     return user
 
