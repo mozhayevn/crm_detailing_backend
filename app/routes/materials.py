@@ -30,6 +30,7 @@ def create_material(
         category=data.category,
         unit_id=data.unit_id,
         cost_per_unit=data.cost_per_unit,
+        min_stock_quantity=data.min_stock_quantity,
         is_active=data.is_active,
     )
     db.add(material)

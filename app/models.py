@@ -291,6 +291,7 @@ class Material(Base):
     category = Column(String, nullable=True)
     unit_id = Column(Integer, ForeignKey("units.id"), nullable=False)
     cost_per_unit = Column(Integer, nullable=False, default=0)
+    min_stock_quantity = Column(Integer, nullable=False, default=0)
     is_active = Column(Boolean, default=True)
 
     brand = relationship("MaterialBrand")

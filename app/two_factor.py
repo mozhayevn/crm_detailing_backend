@@ -181,6 +181,8 @@ def send_two_factor_email(email: str, code: str) -> None:
 """
 
     if not settings.SMTP_HOST or not settings.SMTP_FROM_EMAIL:
+        #Too production
+        #do not print 2FA fallback codesin production logs
         print(f"[2FA] Email code for {email}: {code}")
         return
 
@@ -201,6 +203,8 @@ def send_two_factor_email(email: str, code: str) -> None:
 
             smtp.send_message(message)
     except Exception as error:
+        # Too production
+        # do not print 2FA fallback codesin production logs
         print(f"[2FA] Failed to send email to {email}: {error}")
         print(f"[2FA] Fallback code for {email}: {code}")
 

@@ -20,6 +20,16 @@ VALID_MANUAL_MOVEMENT_TYPES = [
 ]
 
 
+def get_stock_status(current_quantity: int, min_stock_quantity: int) -> str:
+    if current_quantity <= 0:
+        return "out_of_stock"
+
+    if min_stock_quantity > 0 and current_quantity <= min_stock_quantity:
+        return "low_stock"
+
+    return "in_stock"
+
+
 def normalize_stock_quantity(movement_type: str, quantity: int) -> int:
     if movement_type == "receipt":
         return abs(quantity)
@@ -87,6 +97,11 @@ def get_material_stock(
         unit_name=material.unit.name if material.unit else None,
         unit_code=material.unit.code if material.unit else None,
         current_quantity=stock["current_quantity"],
+        min_stock_quantity=material.min_stock_quantity,
+        stock_status=get_stock_status(
+            current_quantity=stock["current_quantity"],
+            min_stock_quantity=material.min_stock_quantity,
+        ),
         stock_value=stock["stock_value"],
         last_unit_cost=stock["last_unit_cost"],
     )

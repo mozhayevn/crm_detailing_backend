@@ -337,8 +337,13 @@ class MaterialStockSummaryResponse(BaseModel):
     unit_name: str | None = None
     unit_code: str | None = None
     current_quantity: int
+    min_stock_quantity: int
+    stock_status: str
     stock_value: int
     last_unit_cost: int | None = None
+
+    class Config:
+        from_attributes = True
 
 
 class OrderResponse(BaseModel):
@@ -603,6 +608,7 @@ class MaterialCreate(BaseModel):
     category: str | None = None
     unit_id: int
     cost_per_unit: int
+    min_stock_quantity: int = 0
     is_active: bool = True
 
 
@@ -612,6 +618,7 @@ class MaterialUpdate(BaseModel):
     category: str | None = None
     unit_id: int | None = None
     cost_per_unit: int | None = None
+    min_stock_quantity: int | None = None
     is_active: bool | None = None
 
 
@@ -622,6 +629,7 @@ class MaterialResponse(BaseModel):
     category: str | None = None
     unit_id: int
     cost_per_unit: int
+    min_stock_quantity: int
     is_active: bool
 
     class Config:
