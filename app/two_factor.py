@@ -13,6 +13,9 @@ from app.models import TwoFactorChallenge, User
 
 TWO_FACTOR_CODE_TTL_MINUTES = 10
 TWO_FACTOR_MAX_ATTEMPTS = 5
+TWO_FACTOR_RESEND_COOLDOWN_SECONDS = 45
+TWO_FACTOR_MAX_CODES_PER_WINDOW = 5
+TWO_FACTOR_RATE_LIMIT_WINDOW_MINUTES = 10
 
 
 def generate_two_factor_code() -> str:
@@ -53,6 +56,53 @@ def mask_phone(phone: str | None) -> str:
     return f"{cleaned[:2]}***{cleaned[-2:]}"
 
 
+def ensure_two_factor_rate_limit(
+    db: Session,
+    user: User,
+    method: str,
+) -> None:
+    now = datetime.utcnow()
+
+    latest_challenge = (
+        db.query(TwoFactorChallenge)
+        .filter(
+            TwoFactorChallenge.user_id == user.id,
+            TwoFactorChallenge.method == method,
+        )
+        .order_by(TwoFactorChallenge.created_at.desc())
+        .first()
+    )
+
+    if latest_challenge:
+        seconds_since_last = (now - latest_challenge.created_at).total_seconds()
+
+        if seconds_since_last < TWO_FACTOR_RESEND_COOLDOWN_SECONDS:
+            raise HTTPException(
+                status_code=429,
+                detail=(
+                    "Подождите немного перед повторной отправкой кода подтверждения."
+                ),
+            )
+
+    window_start = now - timedelta(minutes=TWO_FACTOR_RATE_LIMIT_WINDOW_MINUTES)
+
+    recent_codes_count = (
+        db.query(TwoFactorChallenge)
+        .filter(
+            TwoFactorChallenge.user_id == user.id,
+            TwoFactorChallenge.method == method,
+            TwoFactorChallenge.created_at >= window_start,
+        )
+        .count()
+    )
+
+    if recent_codes_count >= TWO_FACTOR_MAX_CODES_PER_WINDOW:
+        raise HTTPException(
+            status_code=429,
+            detail="Слишком много запросов кода подтверждения. Попробуйте позже.",
+        )
+
+
 def create_two_factor_challenge(
     db: Session,
     user: User,
@@ -63,6 +113,8 @@ def create_two_factor_challenge(
             status_code=400,
             detail="Only email 2FA is available now",
         )
+
+    ensure_two_factor_rate_limit(db=db, user=user, method=method)
 
     code = generate_two_factor_code()
 

@@ -7,7 +7,7 @@ import hashlib
 
 from app.database import get_db
 from app.deps import get_current_active_user, get_user_roles, get_user_permissions
-from app.models import User, UserSession
+from app.models import User, UserSession, TwoFactorChallenge
 from app.schemas import (
     LoginRequest,
     LoginResponse,
@@ -15,6 +15,8 @@ from app.schemas import (
     Token,
     UserResponse,
     VerifyTwoFactorRequest,
+    ResendTwoFactorRequest,
+    ResendTwoFactorResponse,
 )
 from app.security import verify_password, create_access_token
 from app.two_factor import (
@@ -214,4 +216,44 @@ def get_my_permissions(
         is_super_admin=current_user.is_super_admin,
         roles=role_names,
         permissions=permissions,
+    )
+
+
+@router.post("/resend-2fa", response_model=ResendTwoFactorResponse)
+def resend_two_factor_code(
+    data: ResendTwoFactorRequest,
+    db: Session = Depends(get_db),
+):
+    old_challenge = (
+        db.query(TwoFactorChallenge)
+        .filter(TwoFactorChallenge.id == data.challenge_id)
+        .first()
+    )
+
+    if not old_challenge:
+        raise HTTPException(status_code=404, detail="2FA challenge not found")
+
+    if old_challenge.is_used:
+        raise HTTPException(status_code=400, detail="2FA challenge already used")
+
+    user = db.query(User).filter(User.id == old_challenge.user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.two_factor_enabled:
+        raise HTTPException(status_code=400, detail="2FA is not enabled")
+
+    challenge, code = create_two_factor_challenge(
+        db=db,
+        user=user,
+        method=user.two_factor_method or "email",
+    )
+
+    send_two_factor_email(user.email, code)
+
+    return ResendTwoFactorResponse(
+        challenge_id=challenge.id,
+        method=challenge.method,
+        destination_masked=mask_email(user.email),
     )

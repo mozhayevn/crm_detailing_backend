@@ -1076,3 +1076,13 @@ class TwoFactorEnableRequest(BaseModel):
 
 class TwoFactorDisableRequest(BaseModel):
     current_password: str
+
+
+class ResendTwoFactorRequest(BaseModel):
+    challenge_id: int
+
+
+class ResendTwoFactorResponse(BaseModel):
+    challenge_id: int
+    method: str
+    destination_masked: str
